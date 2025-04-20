@@ -130,6 +130,17 @@ navigator.geolocation.getCurrentPosition(
       }, (err) => {
         alert("Could not get your location");
       });
+
+// Create a custom HTML-based icon
+const noteLabel = L.divIcon({
+  className: 'note-label',
+  html: noteText,
+  iconSize: null // prevents an empty space for an icon
+});
+
+// Add it to the map
+L.marker([lat, lng], { icon: noteLabel }).addTo(map);
+
     };
   </script>
   
