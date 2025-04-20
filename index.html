@@ -15,17 +15,16 @@
       top: 10px;
       left: 10px;
       z-index: 1000;
-      background: white;
+      background: transparent;
       padding: 8px 12px;
-      border: 1px solid #ccc;
       cursor: pointer;
-      font-weight: bold;
+      font-weight: regular;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="custom-button" onclick="dropNote()">➕ Drop a note here</div>
+  <div class="custom-button" onclick="dropNote()">Drop a note</div>
   
 
   <!-- Leaflet JS -->
@@ -48,7 +47,8 @@
     const map = L.map('map', {
       center: [0, 0],
       zoom: 5,
-      layers: [minimalBasemap]
+      layers: [minimalBasemap],
+      zoomControl: false
     });
 
 // Center the map on user's current location
