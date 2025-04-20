@@ -47,9 +47,22 @@
   
     const map = L.map('map', {
       center: [0, 0],
-      zoom: 2,
+      zoom: 5,
       layers: [minimalBasemap]
     });
+    
+// Center the map on user's current location
+navigator.geolocation.getCurrentPosition(
+  (pos) => {
+    const latlng = [pos.coords.latitude, pos.coords.longitude];
+    map.setView(latlng, 16); // zoom in nicely on user
+  },
+  (err) => {
+    console.warn("Could not get your location:", err);
+    // Optionally set a fallback location
+    map.setView([51.505, -0.09], 13); // e.g., London
+  }
+);
   
     // Center map on current location
     navigator.geolocation.getCurrentPosition((pos) => {
