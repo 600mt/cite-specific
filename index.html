@@ -36,6 +36,39 @@
       align-items: center;
       text-align: center;
     }
+
+    /* Style for the note writing popup */
+.note-popup {
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+  font-family: sans-serif;
+}
+
+/* Style the textarea */
+.note-popup textarea {
+  padding: 6px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  font-size: 14px;
+  resize:vertical;
+}
+
+/* Style the save button */
+.note-popup button {
+  background-color: #333;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.note-popup button:hover {
+  background-color: #555;
+}
+
   </style>
 </head>
 <body>
@@ -105,6 +138,7 @@
         const latlng = [pos.coords.latitude, pos.coords.longitude];
 
         const popupContent = document.createElement('div');
+        popupContent.className = 'note-popup'; // 👈 Add this line
         const textarea = document.createElement('textarea');
         textarea.rows = 4;
         textarea.cols = 30;
@@ -116,6 +150,8 @@
         popupContent.appendChild(button);
 
         const marker = L.marker(latlng).addTo(map).bindPopup(popupContent).openPopup();
+   
+
 
         button.onclick = async () => {
           const text = textarea.value.trim();
