@@ -2,147 +2,139 @@
 <html>
 <head>
   <title>Map Notes</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/+esm"></script>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Leaflet CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
   <style>
     body, html { margin: 0; padding: 0; height: 100%; }
     #map { width: 100%; height: 100%; }
+
     .custom-button {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      bottom: 5vh;
+      left: 35vw;
+      right:35vw;
       z-index: 1000;
-      background: transparent;
+      background: rgba(255,255,255,0.9);
       padding: 8px 12px;
+      border: 0px solid #ccc;
+      text-align: center;
+      border-radius: 100px;
       cursor: pointer;
-      font-weight: regular;
+      width:30vw;
+    }
+
+    .note-label {
+      background: transparent;
+      padding: 3px 5px;
+      border-radius: 6px;
+      font-size: 15px;
+      white-space: nowrap;
+      max-width: 200px;
+      font-family: 'Times New Roman', Times, serif;
+      align-items: center;
+      text-align: center;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="custom-button" onclick="dropNote()">Drop a note</div>
-  
+  <div class="custom-button" onclick="dropNote()">Drop a note here</div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
   <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/+esm';
-  
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+    // ✅ Your working Supabase project (do not share this in public repos!)
     const supabaseUrl = 'https://neesddmioeafquxfmsfc.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5lZXNkZG1pb2VhZnF1eGZtc2ZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUxNDU5MjEsImV4cCI6MjA2MDcyMTkyMX0._n0JiCLHIv9o0kIokcDGZ3ctWoC2SP4VX_sHQOWZFFI';
     const supabase = createClient(supabaseUrl, supabaseKey);
-  
-    // Minimal basemap (no labels)
-    const minimalBasemap = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap, Carto',
-      subdomains: 'abcd',
-      maxZoom: 19
-    });
-  
+
+    // 🌍 Minimal base map
     const map = L.map('map', {
       center: [0, 0],
-      zoom: 5,
-      layers: [minimalBasemap],
+      zoom: 2,
       zoomControl: false
     });
 
-// Center the map on user's current location
-navigator.geolocation.getCurrentPosition(
-  (pos) => {
-    const latlng = [pos.coords.latitude, pos.coords.longitude];
-    map.setView(latlng, 16); // zoom in nicely on user
-  },
-  (err) => {
-    console.warn("Could not get your location:", err);
-    // Optionally set a fallback location
-    map.setView([51.505, -0.09], 13); // e.g., London
-  }
-);
-  
-    // Center map on current location
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const latlng = [pos.coords.latitude, pos.coords.longitude];
-      map.setView(latlng, 16);
-    }, (err) => {
-      alert("Could not get your location");
-    });
-  
-    // Load existing notes from Supabase
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap, Carto',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    // 📍 Center on user location
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+      },
+      (err) => {
+        console.warn("Could not get location", err);
+        map.setView([51.505, -0.09], 13); // fallback
+      }
+    );
+
+    // 📥 Load and show existing notes
     async function loadNotes() {
       const { data, error } = await supabase.from('notes').select('*');
-  
       if (error) {
-        console.error('Error loading notes:', error);
+        console.error("Load error:", error);
         return;
       }
-  
-      data.forEach(note => {
-        L.marker([note.lat, note.lon])
-          .addTo(map)
-          .bindPopup(note.text || '(no text)');
-      });
+
+      data.forEach(note => showTextLabel(note.lat, note.lon, note.text));
     }
-  
+
+    function showTextLabel(lat, lon, text) {
+      const labelIcon = L.divIcon({
+        className: '', // override leaflet's default
+        html: `<div class="note-label">${text}</div>`,
+        iconSize: null,
+        iconAnchor: [0, 0]
+      });
+
+      L.marker([lat, lon], { icon: labelIcon }).addTo(map);
+    }
+
     loadNotes();
-  
-    // Make the function globally available so the button works
-    window.dropNote = function () {
+
+    // 📝 Drop a new note
+    window.dropNote = () => {
       navigator.geolocation.getCurrentPosition((pos) => {
         const latlng = [pos.coords.latitude, pos.coords.longitude];
-  
+
         const popupContent = document.createElement('div');
-  
         const textarea = document.createElement('textarea');
         textarea.rows = 4;
         textarea.cols = 30;
         textarea.placeholder = "Write your note here...";
         popupContent.appendChild(textarea);
-  
+
         const button = document.createElement('button');
         button.textContent = "Save Note";
         popupContent.appendChild(button);
-  
-        const marker = L.marker(latlng).addTo(map);
-        marker.bindPopup(popupContent).openPopup();
-  
+
+        const marker = L.marker(latlng).addTo(map).bindPopup(popupContent).openPopup();
+
         button.onclick = async () => {
           const text = textarea.value.trim();
           if (!text) return alert("Note can't be empty");
-  
+
           const { error } = await supabase.from('notes').insert([
             { lat: latlng[0], lon: latlng[1], text }
           ]);
-  
+
           if (error) {
-            alert('Error saving note!');
-            console.error(error);
+            console.error("Save error:", error);
+            alert("Could not save note.");
           } else {
-            alert('Note saved!');
-            marker.closePopup();
-            marker.bindPopup(text);
+            marker.remove(); // remove temp pin
+            showTextLabel(latlng[0], latlng[1], text);
           }
         };
-      }, (err) => {
-        alert("Could not get your location");
-      });
-
-// Create a custom HTML-based icon
-const noteLabel = L.divIcon({
-  className: 'note-label',
-  html: noteText,
-  iconSize: null // prevents an empty space for an icon
-});
-
-// Add it to the map
-L.marker([lat, lng], { icon: noteLabel }).addTo(map);
-
+      }, () => alert("Location not found"));
     };
   </script>
-  
 </body>
 </html>
