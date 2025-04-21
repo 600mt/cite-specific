@@ -3,7 +3,7 @@
 <head>
   <title>Map Notes</title>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
   <style>
@@ -38,37 +38,87 @@
     }
 
     /* Style for the note writing popup */
-.note-popup {
-  display:flex;
-  flex-direction: column;
-  gap: 10px;
-  font-family: sans-serif;
+    .note-popup {
+      display:flex;
+      flex-direction: column;
+      gap: 10px;
+      font-family: sans-serif;
+      background-color: white;
+      box-shadow: none;
+    }
+
+    .leaflet-popup-content-wrapper {
+  background: white !important;
+  box-shadow: none !important;
+  border: none !important;
+  font-family: 'Times New Roman', Times, serif!important; 
 }
 
-/* Style the textarea */
-.note-popup textarea {
-  padding: 6px;
-  border: 1px solid #aaa;
-  border-radius: 4px;
-  font-size: 14px;
-  resize:vertical;
+.leaflet-popup-tip {
+  background: transparent !important;
+  box-shadow: none !important;
+  font-family: 'Times New Roman', Times, serif!important; 
 }
 
-/* Style the save button */
-.note-popup button {
-  background-color: #333;
-  color: white;
-  border: none;
-  padding: 6px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+    /* Style the textarea */
+    .note-popup textarea {
+      padding: 6px;
+      border: 0px solid #aaa;
+      background-color: white;
+      border-radius: 4px;
+      font-size: 14px;
+      resize: vertical;
+    }
+
+    /* Style the save button */
+    .note-popup button {
+      background-color: #333; 
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: none;
+    }
+
+    .note-popup button:hover {
+      background-color: #555;
+    }
+
+    /* 🔧 Responsive tweaks for mobile */
+    @media (max-width: 768px) {
+      .note-popup {
+        width: 100vw;
+        max-width: 90vw;
+        height: auto;
+        padding: 1px;
+        box-shadow: none;
+      }
+
+      .leaflet-popup-content-wrapper {
+  background: white !important;
+  box-shadow: none !important;
+  border: none !important;
+  font-family: 'Times New Roman', Times, serif!important; 
 }
 
-.note-popup button:hover {
-  background-color: #555;
+.leaflet-popup-tip {
+  background: transparent !important;
+  box-shadow: none !important;
+  font-family: 'Times New Roman', Times, serif!important; 
 }
 
+
+      .note-popup textarea {
+        width: 100%;
+        font-size: 16px;
+      }
+
+      .note-popup button {
+        width: 100%;
+        font-size: 16px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -79,12 +129,10 @@
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-    // ✅ Your working Supabase project (do not share this in public repos!)
     const supabaseUrl = 'https://neesddmioeafquxfmsfc.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5lZXNkZG1pb2VhZnF1eGZtc2ZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUxNDU5MjEsImV4cCI6MjA2MDcyMTkyMX0._n0JiCLHIv9o0kIokcDGZ3ctWoC2SP4VX_sHQOWZFFI';
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 🌍 Minimal base map
     const map = L.map('map', {
       center: [0, 0],
       zoom: 2,
@@ -97,7 +145,6 @@
       maxZoom: 19
     }).addTo(map);
 
-    // 📍 Center on user location
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         map.setView([pos.coords.latitude, pos.coords.longitude], 16);
@@ -108,7 +155,6 @@
       }
     );
 
-    // 📥 Load and show existing notes
     async function loadNotes() {
       const { data, error } = await supabase.from('notes').select('*');
       if (error) {
@@ -121,7 +167,7 @@
 
     function showTextLabel(lat, lon, text) {
       const labelIcon = L.divIcon({
-        className: '', // override leaflet's default
+        className: '',
         html: `<div class="note-label">${text}</div>`,
         iconSize: null,
         iconAnchor: [0, 0]
@@ -132,13 +178,12 @@
 
     loadNotes();
 
-    // 📝 Drop a new note
     window.dropNote = () => {
       navigator.geolocation.getCurrentPosition((pos) => {
         const latlng = [pos.coords.latitude, pos.coords.longitude];
 
         const popupContent = document.createElement('div');
-        popupContent.className = 'note-popup'; // 👈 Add this line
+        popupContent.className = 'note-popup';
         const textarea = document.createElement('textarea');
         textarea.rows = 4;
         textarea.cols = 30;
@@ -149,9 +194,10 @@
         button.textContent = "Save Note";
         popupContent.appendChild(button);
 
-        const marker = L.marker(latlng).addTo(map).bindPopup(popupContent).openPopup();
-   
-
+        const marker = L.marker(latlng).addTo(map).bindPopup(popupContent, {
+          maxWidth: "auto",
+          className: 'custom-popup'
+        }).openPopup();
 
         button.onclick = async () => {
           const text = textarea.value.trim();
@@ -165,7 +211,7 @@
             console.error("Save error:", error);
             alert("Could not save note.");
           } else {
-            marker.remove(); // remove temp pin
+            marker.remove();
             showTextLabel(latlng[0], latlng[1], text);
           }
         };
