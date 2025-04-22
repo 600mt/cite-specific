@@ -145,13 +145,28 @@
       maxZoom: 19
     }).addTo(map);
 
-    navigator.geolocation.getCurrentPosition(
+    // 🌐 Track user's location continuously
+    let currentPosition = null;
+
+    navigator.geolocation.watchPosition(
       (pos) => {
-        map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+        currentPosition = pos.coords;
+        if (!map._locationInitialized) {
+          map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+          map._locationInitialized = true;
+        }
       },
       (err) => {
-        console.warn("Could not get location", err);
-        map.setView([51.505, -0.09], 13); // fallback
+        console.warn("Location tracking error:", err);
+        if (!map._locationInitialized) {
+          map.setView([51.505, -0.09], 13);
+          map._locationInitialized = true;
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000
       }
     );
 
@@ -179,44 +194,104 @@
     loadNotes();
 
     window.dropNote = () => {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const latlng = [pos.coords.latitude, pos.coords.longitude];
+  if (!currentPosition) {
+    alert("Still getting your location... please try again in a moment.");
+    return;
+  }
 
-        const popupContent = document.createElement('div');
-        popupContent.className = 'note-popup';
-        const textarea = document.createElement('textarea');
-        textarea.rows = 4;
-        textarea.cols = 30;
-        textarea.placeholder = "Write your note here...";
-        popupContent.appendChild(textarea);
+  const latlng = [currentPosition.latitude, currentPosition.longitude];
 
-        const button = document.createElement('button');
-        button.textContent = "Save Note";
-        popupContent.appendChild(button);
+  const popupContent = document.createElement('div');
+  popupContent.className = 'note-popup';
 
-        const marker = L.marker(latlng).addTo(map).bindPopup(popupContent, {
-          maxWidth: "auto",
-          className: 'custom-popup'
-        }).openPopup();
+  // Formatting toolbar
+  const toolbar = document.createElement('div');
+  toolbar.style.display = "flex";
+  toolbar.style.gap = "8px";
+  toolbar.style.flexWrap = "wrap";
 
-        button.onclick = async () => {
-          const text = textarea.value.trim();
-          if (!text) return alert("Note can't be empty");
+  const formatButtons = [
+    { label: "B", tag: "b", style: "font-weight:bold;" },
+    { label: "I", tag: "i", style: "font-style:italic;" },
+    { label: "U", tag: "u", style: "text-decoration:underline;" }
+  ];
 
-          const { error } = await supabase.from('notes').insert([
-            { lat: latlng[0], lon: latlng[1], text }
-          ]);
+  formatButtons.forEach(({ label, tag, style }) => {
+    const btn = document.createElement('button');
+    btn.innerHTML = label;
+    btn.style = style + "padding:4px 8px; cursor:pointer;";
+    btn.onclick = () => wrapSelectionWithTag(tag);
+    toolbar.appendChild(btn);
+  });
 
-          if (error) {
-            console.error("Save error:", error);
-            alert("Could not save note.");
-          } else {
-            marker.remove();
-            showTextLabel(latlng[0], latlng[1], text);
-          }
-        };
-      }, () => alert("Location not found"));
-    };
+  // Font size dropdown
+  const sizeSelect = document.createElement('select');
+  sizeSelect.innerHTML = `
+    <option value="">Size</option>
+    <option value="12px">Small</option>
+    <option value="16px">Normal</option>
+    <option value="24px">Large</option>
+  `;
+  sizeSelect.onchange = () => {
+    const size = sizeSelect.value;
+    if (size) wrapSelectionWithSpan(size);
+  };
+  toolbar.appendChild(sizeSelect);
+
+  popupContent.appendChild(toolbar);
+
+  // Text area
+  const textarea = document.createElement('textarea');
+  textarea.rows = 4;
+  textarea.cols = 30;
+  textarea.placeholder = "Write your note here...";
+  popupContent.appendChild(textarea);
+
+  const button = document.createElement('button');
+  button.textContent = "Save Note";
+  popupContent.appendChild(button);
+
+  const marker = L.marker(latlng).addTo(map).bindPopup(popupContent, {
+    maxWidth: "auto"
+  }).openPopup();
+
+  // Helper functions to wrap selected text
+  function wrapSelectionWithTag(tag) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = textarea.value.substring(start, end);
+    const before = textarea.value.substring(0, start);
+    const after = textarea.value.substring(end);
+    textarea.value = `${before}<${tag}>${selected}</${tag}>${after}`;
+  }
+
+  function wrapSelectionWithSpan(size) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = textarea.value.substring(start, end);
+    const before = textarea.value.substring(0, start);
+    const after = textarea.value.substring(end);
+    textarea.value = `${before}<span style="font-size:${size}">${selected}</span>${after}`;
+  }
+
+  button.onclick = async () => {
+    const text = textarea.value.trim();
+    if (!text) return alert("Note can't be empty");
+
+    const { error } = await supabase.from('notes').insert([
+      { lat: latlng[0], lon: latlng[1], text }
+    ]);
+
+    if (error) {
+      console.error("Save error:", error);
+      alert("Could not save note.");
+    } else {
+      marker.remove();
+      showTextLabel(latlng[0], latlng[1], text);
+    }
+  };
+};
+
   </script>
 </body>
 </html>
