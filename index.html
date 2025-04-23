@@ -26,16 +26,20 @@
     }
 
     .note-label {
-      background: transparent;
-      padding: 3px 5px;
-      border-radius: 6px;
-      font-size: 15px;
-      white-space: nowrap;
-      max-width: 200px;
-      font-family: 'Times New Roman', Times, serif;
-      align-items: center;
-      text-align: center;
-    }
+  background: transparent;
+  padding: 3px 5px;
+  border-radius: 6px;
+  white-space: nowrap;
+  max-width: 200px;
+  font-family: 'Times New Roman', Times, serif;
+  align-items: center;
+  text-align: center;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  color: inherit;
+  display: inline-block; /* Ensure inline elements are displayed correctly */
+}
+
 
     /* Style for the note writing popup */
     .note-popup {
@@ -180,16 +184,18 @@
       data.forEach(note => showTextLabel(note.lat, note.lon, note.text));
     }
 
-    function showTextLabel(lat, lon, text) {
-      const labelIcon = L.divIcon({
-        className: '',
-        html: `<div class="note-label">${text}</div>`,
-        iconSize: null,
-        iconAnchor: [0, 0]
-      });
+function showTextLabel(lat, lon, text) {
+  const labelIcon = L.divIcon({
+    className: 'note-label',  // Ensure you have the 'note-label' class
+    html: text,  // This will render your HTML, including colors
+    iconSize: null,
+    iconAnchor: [0, 0]
+  });
 
-      L.marker([lat, lon], { icon: labelIcon }).addTo(map);
-    }
+  L.marker([lat, lon], { icon: labelIcon }).addTo(map);
+}
+
+
 
     loadNotes();
 
@@ -240,6 +246,23 @@
 
   popupContent.appendChild(toolbar);
 
+  // Text color dropdown
+const colorSelect = document.createElement('select');
+colorSelect.innerHTML = `
+  <option value="">Color</option>
+  <option value="red">Red</option>
+  <option value="green">Green</option>
+  <option value="blue">Blue</option>
+  <option value="orange">Orange</option>
+  <option value="purple">Purple</option>
+`;
+colorSelect.onchange = () => {
+  const color = colorSelect.value;
+  if (color) wrapSelectionWithColor(color);
+};
+toolbar.appendChild(colorSelect);
+
+
   // Text area
   const textarea = document.createElement('textarea');
   textarea.rows = 4;
@@ -265,6 +288,15 @@
     textarea.value = `${before}<${tag}>${selected}</${tag}>${after}`;
   }
 
+  function wrapSelectionWithColor(color) {
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const selected = textarea.value.substring(start, end);
+  const before = textarea.value.substring(0, start);
+  const after = textarea.value.substring(end);
+  textarea.value = `${before}<span style="color:${color}">${selected}</span>${after}`;
+}
+
   function wrapSelectionWithSpan(size) {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
@@ -274,22 +306,23 @@
     textarea.value = `${before}<span style="font-size:${size}">${selected}</span>${after}`;
   }
 
-  button.onclick = async () => {
-    const text = textarea.value.trim();
-    if (!text) return alert("Note can't be empty");
+button.onclick = async () => {
+  const text = textarea.value.trim(); // 👈 Place this line here
 
-    const { error } = await supabase.from('notes').insert([
-      { lat: latlng[0], lon: latlng[1], text }
-    ]);
+  if (!text) return alert("Note can't be empty");
 
-    if (error) {
-      console.error("Save error:", error);
-      alert("Could not save note.");
-    } else {
-      marker.remove();
-      showTextLabel(latlng[0], latlng[1], text);
-    }
-  };
+  const { error } = await supabase.from('notes').insert([
+    { lat: latlng[0], lon: latlng[1], text } // ✅ This will include your HTML formatting
+  ]);
+
+  if (error) {
+    console.error("Save error:", error);
+    alert("Could not save note.");
+  } else {
+    marker.remove();
+    showTextLabel(latlng[0], latlng[1], text); // ✅ Pass the raw HTML to render
+  }
+};
 };
 
   </script>
