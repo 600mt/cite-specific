@@ -30,14 +30,15 @@
   padding: 3px 5px;
   border-radius: 6px;
   white-space: nowrap;
-  max-width: 200px;
+  max-width: 50vw;
   font-family: 'Times New Roman', Times, serif;
   align-items: center;
-  text-align: center;
   overflow-wrap: break-word;
   word-break: break-word;
   color: inherit;
   display: inline-block; /* Ensure inline elements are displayed correctly */
+  text-align: left; /* Paragraph look */
+  line-height: 1.4; /* Nice readable spacing */
 }
 
 
@@ -184,17 +185,24 @@
       data.forEach(note => showTextLabel(note.lat, note.lon, note.text));
     }
 
-function showTextLabel(lat, lon, text) {
+    function showTextLabel(lat, lon, text) {
+  const formattedText = text
+    .split(' ')
+    .reduce((acc, word, i) => {
+      acc += word + ' ';
+      if ((i + 1) % 8 === 0) acc += '<br>';
+      return acc;
+    }, '');
+
   const labelIcon = L.divIcon({
-    className: 'note-label',  // Ensure you have the 'note-label' class
-    html: text,  // This will render your HTML, including colors
+    className: 'note-label',
+    html: formattedText.trim(),
     iconSize: null,
     iconAnchor: [0, 0]
   });
 
   L.marker([lat, lon], { icon: labelIcon }).addTo(map);
 }
-
 
 
     loadNotes();
