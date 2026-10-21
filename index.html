@@ -3,63 +3,96 @@
 <head>
   <title>Map Notes</title>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
   <style>
+    /* One text size and style for everything on the page: notes and menu */
+    :root {
+      --text-size: 13px;
+      --text-font: 'Arial Narrow', 'Times New Roman', serif;
+      --text-glow: 0 0 4px #e892a2, 0 0 4px #e892a2, 0 0 3px #e892a2;
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
-    body, html { margin: 0; padding: 0; height: 100%; font-family: 'Arial', serif; }
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
     #map { width: 100%; height: 100%; background: #f2efe9; }
 
+    /* ── Notes on the map ─────────────────────────────────────── */
     .note-label {
       background: transparent;
-      font-family: 'Arial Narrow', 'Times New Roman', serif;
-      color: #000000;
-      text-shadow: 0 0 4px #e892a2, 0 0 4px #e892a2, 0 0 3px #e892a2;
-      line-height: 1.2;
-      max-width: 180px;
+      font-family: var(--text-font);
+      font-size: var(--text-size);
+      color: #000;
+      text-shadow: var(--text-glow);
+      line-height: 1.25;
+      max-width: 200px;
       white-space: normal;
       word-break: break-word;
-      text-align: center;
+      text-align: left;
       cursor: default;
       transition: opacity 0.2s ease;
       opacity: 1;
     }
     .note-title { font-weight: bold; }
+    .note-desc, .note-long { display: none; }
+    .note-long { white-space: pre-line; }
+
+    /* Region level: short line under the title */
+    .zoom-mid .note-desc { display: block; }
+    /* Close up: the longer description (or the short line if there is none) */
+    .zoom-near .note-label.has-long { max-width: 280px; }
+    .zoom-near .note-long { display: block; }
+    .zoom-near .note-label:not(.has-long) .note-desc { display: block; }
+
     /* !important because MapLibre sets an inline opacity on every marker */
     .labels-dimmed .note-label { opacity: 0.15 !important; }
     .note-label.is-hovered { opacity: 1 !important; z-index: 1; }
 
-    /* Zoomed out: titles only. Hovering (or tapping) a title shows its text
-       underneath without pushing the other notes around. */
-    .labels-brief .note-desc { display: none; }
-    .labels-brief .note-label.is-hovered .note-desc {
-      display: block;
+    /* ── Category menu ────────────────────────────────────────── */
+    .legend {
       position: absolute;
-      top: 100%; left: 50%;
-      transform: translateX(-50%);
-      width: 180px;
+      top: calc(12px + env(safe-area-inset-top, 0px));
+      left: 12px;
+      z-index: 1000;
+      font-family: var(--text-font);
+      font-size: var(--text-size);
+      line-height: 1.25;
+      color: #000;
+      text-shadow: var(--text-glow);
     }
+    .legend label {
+      display: flex; align-items: center; gap: 7px;
+      padding: 2px 0;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .legend input { margin: 0; width: 12px; height: 12px; accent-color: #000; cursor: pointer; }
+    .legend .count { margin-left: 4px; }
 
     .maplibregl-ctrl-attrib.maplibregl-compact { min-width: 24px; }
     .maplibregl-ctrl-attrib-button { display: block !important; }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+  <div style="color:#0088ff" id="map"></div> 
+  <nav id="legend" class="legend" aria-label="Show on the map"></nav>
 
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="map-notes.js"></script>
   <script>
     // =========================================================================
-    // 🎨  MAP PALETTE: coastline, buildings and borders only
+    // 🎨  MAP PALETTE: fields, rock, coastline, buildings and borders
     // =========================================================================
     const COLORS = {
       background:      "#ffffff",
-      water:           "#aad3df",
+      fields:          "#eef0d5",  // farmland, orchards, vineyards
+      rock:            "#eef0d5",  // bare rock and scree
+      water:           "#ffffff",
       building:        "#d9d0c9",
-      buildingOutline: "#c6bbb0",
-      boundary:        "#ac46ac",
+      buildingOutline: "#d9d0c9",
+      boundary:        "#e892a2",
     };
 
     const mapStyle = {
@@ -69,8 +102,22 @@
       },
       layers: [
         { id: "background", type: "background", paint: { "background-color": COLORS.background } },
+        { id: "fields", type: "fill", source: "openmaptiles", "source-layer": "landcover", filter: ["==","class","farmland"], paint: { "fill-color": COLORS.fields } },
+        { id: "rock", type: "fill", source: "openmaptiles", "source-layer": "landcover", filter: ["==","class","rock"], paint: { "fill-color": COLORS.rock } },
         { id: "water", type: "fill", source: "openmaptiles", "source-layer": "water", paint: { "fill-color": COLORS.water } },
         { id: "building", type: "fill", source: "openmaptiles", "source-layer": "building", minzoom: 14, paint: { "fill-color": COLORS.building, "fill-outline-color": COLORS.buildingOutline } },
+        {
+  id: "funicular-lines",
+  type: "line",
+  source: "openmaptiles", // Replace with your exact source ID if different
+  "source-layer": "transportation",
+  filter: ["==", ["get", "subclass"], "funicular"],
+  paint: {
+    "line-color": COLORS.funicular || "#ff5500", // Fallback hex color if COLORS.funicular is undefined
+    "line-width": 2
+  }
+},
+
         { id: "boundary", type: "line", source: "openmaptiles", "source-layer": "boundary", filter: ["==","admin_level",2], paint: { "line-color": COLORS.boundary, "line-width": 0.8, "line-dasharray": [4,2] } }
       ]
     };
@@ -90,56 +137,67 @@
     });
 
     // =========================================================================
-    // 🔠  ZOOM-DRIVEN TEXT
+    // 🔎  WHAT EACH NOTE SHOWS, BY ZOOM
+    //     below SHORT_MIN_ZOOM: title only
+    //     from SHORT_MIN_ZOOM:  title + short line (`text`)
+    //     from LONG_MIN_ZOOM:   title + longer description (`long`)
     // =========================================================================
-    const FONT_MIN_PX = 7, FONT_MAX_PX = 15, ZOOM_MIN = 4, ZOOM_MAX = 16;
-    const DESC_MIN_ZOOM = 7;   // below this zoom, notes show their title only
-    const STACK_GAP_PX = 2;    // space between notes that would otherwise overlap
+    const SHORT_MIN_ZOOM = 5;    // roughly region level
+    const LONG_MIN_ZOOM  = 14;   // roughly street level
+    const STACK_GAP_PX   = 3;    // space between notes that would otherwise overlap
 
-    function zoomToFontSize(zoom) {
-      const t = Math.max(0, Math.min(1, (zoom - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN)));
-      return FONT_MIN_PX + t * (FONT_MAX_PX - FONT_MIN_PX);
+    // =========================================================================
+    // 🗂  CATEGORIES (from map-notes.js)
+    // =========================================================================
+    const categories = new Map();
+    (window.MAP_CATEGORIES || [{ id: 'works', label: 'Works' }])
+      .forEach(c => categories.set(c.id, { ...c, visible: true }));
+    function categoryOf(n) {
+      const id = n.category || 'works';
+      if (!categories.has(id)) categories.set(id, { id, label: id, visible: true });
+      return categories.get(id);
     }
 
+    // =========================================================================
+    // 📍  NOTES
+    // =========================================================================
     const mapEl = document.getElementById('map');
-    const notes = [];   // { el, marker, lat, lon }
+    const notes = [];   // { data, cat, el, marker }
+
+    function addLine(el, className, text) {
+      const div = document.createElement('div');
+      div.className = className;
+      div.textContent = text;
+      el.appendChild(div);
+    }
 
     function showNote(n) {
       const el = document.createElement('div');
       el.className = 'note-label';
-
-      const title = document.createElement('div');
-      title.className = 'note-title';
-      title.textContent = n.title || '';
-      el.appendChild(title);
-
-      if (n.text) {
-        const desc = document.createElement('div');
-        desc.className = 'note-desc';
-        desc.textContent = n.text;
-        el.appendChild(desc);
-      }
+      addLine(el, 'note-title', n.title || '');
+      if (n.text) addLine(el, 'note-desc', n.text);
+      if (n.long) { addLine(el, 'note-long', n.long); el.classList.add('has-long'); }
 
       el.addEventListener('mouseenter', () => { mapEl.classList.add('labels-dimmed'); el.classList.add('is-hovered'); });
       el.addEventListener('mouseleave', () => { mapEl.classList.remove('labels-dimmed'); el.classList.remove('is-hovered'); });
 
-      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+      const marker = new maplibregl.Marker({ element: el, anchor: 'left' })
         .setLngLat([n.lon, n.lat]).addTo(map);
-      notes.push({ el, marker, lat: n.lat, lon: n.lon });
+      notes.push({ data: n, cat: categoryOf(n), el, marker });
     }
 
-    // Notes that would overlap on screen (e.g. several works in one city when
+    // Notes that would overlap on screen (e.g. several items in one city when
     // zoomed out) are stacked downwards from the northernmost one. As you zoom
     // in they spread apart and settle back on their own locations.
     function declutter() {
-      const items = notes.map(n => {
-        const p = map.project([n.lon, n.lat]);
+      const items = notes.filter(n => n.cat.visible).map(n => {
+        const p = map.project([n.data.lon, n.data.lat]);
         return { n, x: p.x, y: p.y, w: n.el.offsetWidth, h: n.el.offsetHeight };
       }).sort((a, b) => a.y - b.y || a.x - b.x);
 
       const placed = [];
       for (const it of items) {
-        const left = it.x - it.w / 2, right = it.x + it.w / 2;
+        const left = it.x, right = it.x + it.w;   // labels start at their point
         const home = it.y - it.h / 2;
         let top = home;
         for (let moved = true; moved; ) {
@@ -159,21 +217,51 @@
 
     function relayout() {
       const zoom = map.getZoom();
-      const size = zoomToFontSize(zoom) + 'px';
-      for (const n of notes) n.el.style.fontSize = size;
-      mapEl.classList.toggle('labels-brief', zoom < DESC_MIN_ZOOM);
+      mapEl.classList.toggle('zoom-mid',  zoom >= SHORT_MIN_ZOOM && zoom < LONG_MIN_ZOOM);
+      mapEl.classList.toggle('zoom-near', zoom >= LONG_MIN_ZOOM);
       declutter();
     }
 
     // =========================================================================
-    // 📥  LOAD the portfolio notes from map-notes.js
+    // 🗂  MENU: one toggle per category that has notes on the map
     // =========================================================================
-    const entries = window.MAP_NOTES || [];
+    function buildLegend() {
+      const legend = document.getElementById('legend');
+      for (const cat of categories.values()) {
+        const count = notes.filter(n => n.cat === cat).length;
+        if (!count) continue;
+
+        const label = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = cat.visible;
+        box.addEventListener('change', () => {
+          cat.visible = box.checked;
+          for (const n of notes) if (n.cat === cat) n.el.style.display = cat.visible ? '' : 'none';
+          relayout();
+        });
+
+        const name = document.createElement('span');
+        name.textContent = cat.label;
+        const num = document.createElement('span');
+        num.className = 'count';
+        num.textContent = '(' + count + ')';
+
+        label.append(box, name, num);
+        legend.appendChild(label);
+      }
+      if (!legend.children.length) legend.remove();
+    }
+
+    // =========================================================================
+    // 📥  LOAD the notes from map-notes.js
+    // =========================================================================
     if (!window.MAP_NOTES) console.warn('map-notes.js not found or empty');
-    entries
+    (window.MAP_NOTES || [])
       .filter(n => typeof n.lat === 'number' && typeof n.lon === 'number')
       .forEach(showNote);
 
+    buildLegend();
     relayout();
     map.on('zoom', relayout);
     map.on('rotate', relayout);
