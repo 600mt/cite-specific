@@ -4,346 +4,490 @@
   <title>Map Notes</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
   <style>
-    body, html { margin: 0; padding: 0; height: 100%; }
-    #map { width: 100%; height: 100%; }
+    @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&display=swap');
 
-    .custom-button {
+    *, *::before, *::after { box-sizing: border-box; }
+    body, html { margin: 0; padding: 0; height: 100%; font-family: 'Arial','IM Fell English', serif; }
+    #map { width: 100%; height: 100%; background: #f2efe9; }
+
+    /* ── Bottom control buttons ──────────────────────────────── */
+    .ctrl-btn {
       position: absolute;
-      bottom: 5vh;
-      left: 35vw;
-      right:35vw;
+      left: 50%;
+      transform: translateX(-50%);
       z-index: 1000;
-      background: rgba(255,255,255,0.9);
-      padding: 8px 12px;
-      border: 0px solid #ccc;
-      text-align: center;
+      padding: 12px 30px;
+border: none;
       border-radius: 100px;
       cursor: pointer;
-      width:30vw;
+      font-family: 'Arial', 'Times New Roman', serif;
+      font-size: 12px;
+      color: #000;
+      white-space: nowrap;
+      backdrop-filter: blur(4px);
+      -webkit-tap-highlight-color: transparent;
     }
+    .ctrl-btn:hover {  }
+    .drop-btn   { bottom: 5vh; background: #000; color: #fff; }
+    .drop-btn:active { background: #333; }
+    .toggle-btn { bottom: calc(5vh + 58px); background: #fff; font-size: 13px; padding: 9px 22px; }
+    .toggle-btn:active { background: #eee; }
+    .toggle-btn.active { background: #000; color: #fff; }
+
+    /* Sync status pill, top-left */
+    .sync-pill {
+      position: absolute;
+      top: 12px; left: 12px;
+      z-index: 1000;
+      background: #fff;
+border: none;
+      border-radius: 100px;
+      padding: 6px 14px;
+      font-family: 'Arial', 'Times New Roman', serif;
+      font-size: 12px;
+      color: #000;
+      display: flex; align-items: center; gap: 7px;
+      max-width: 70vw;
+    }
+    .sync-dot { width: 9px; height: 9px; border-radius: 50%; background: #999; flex: none; }
+    .sync-dot.ok      { background: #2d6a4f; }
+    .sync-dot.pending { background: #e0a000; }
+    .sync-dot.err     { background: #a33; }
 
     .note-label {
-  background: transparent;
-  padding: 3px 5px;
-  border-radius: 6px;
-  white-space: nowrap;
-  max-width: 50vw;
-  font-family: 'Times New Roman', Times, serif;
-  align-items: center;
-  overflow-wrap: break-word;
-  word-break: break-word;
-  color: inherit;
-  display: inline-block; /* Ensure inline elements are displayed correctly */
-  text-align: center; /* Paragraph look */
-  line-height: 1.4; /* Nice readable spacing */
-  transition: font-size 0.3s ease-out;
-}
-
-
-    /* Style for the note writing popup */
-    .note-popup {
-      display:flex;
-      flex-direction: column;
-      gap: 10px;
-      font-family: sans-serif;
-      background-color: white;
-      box-shadow: none;
+      background: transparent;
+      font-family: 'Arial Narrow', 'Times New Roman', serif;
+      color: #000000;
+      text-shadow: 0 0 4px #e892a2, 0 0 4px #e892a2, 0 0 3px #e892a2;
+      line-height: 1.2;
+      max-width: 180px;
+      white-space: normal;
+      word-break: break-word;
+      text-align: center;
+      cursor: default;
+      transition: opacity 0.2s ease, font-size 0.15s ease;
+      opacity: 1;
     }
+    .labels-dimmed .note-label { opacity: 0.15; }
+    .note-label.is-hovered { opacity: 1 !important; }
+    body.base-hidden .note-label { text-shadow: none; }
 
-    .leaflet-popup-content-wrapper {
-  background: white !important;
-  box-shadow: none !important;
-  border: none !important;
-  font-family: 'Times New Roman', Times, serif!important; 
-}
-
-.leaflet-popup-tip {
-  background: transparent !important;
-  box-shadow: none !important;
-  font-family: 'Times New Roman', Times, serif!important; 
-}
-
-    /* Style the textarea */
-    .note-popup textarea {
-      padding: 6px;
-      border: 0px solid #aaa;
-      background-color: white;
-      border-radius: 4px;
-      font-size: 14px;
-      resize: vertical;
+    .maplibregl-popup-content {
+      background: #fff !important;
+      border-radius: 6px !important;
+      padding: 16px !important;
+      font-family: 'Arial', 'IM Fell English', serif !important;
+      min-width: 220px;
     }
+    .maplibregl-popup-tip { display: none !important; }
+    .maplibregl-popup-close-button { font-size: 18px; color: #000; padding: 4px 8px; }
 
-    /* Style the save button */
-    .note-popup button {
-      background-color: #333; 
-      color: white;
-      border: none;
-      padding: 6px 10px;
-      border-radius: 100px;
-      cursor: pointer;
-      transition: none;
-    }
+    .note-popup { display: flex; flex-direction: column; gap: 10px; }
+    .note-popup h3 { margin: 0 0 4px; font-family: 'Arial', 'Times New Roman', serif; font-size: 12px; color: #666; font-weight: normal; }
 
-    .note-popup button:hover {
-      background-color: #555;
-    }
+    .note-popup textarea { padding: 8px; border: 1px solid #000; background: #fff; border-radius: 4px; font-size: 14px; font-family: 'Arial', 'IM Fell English', serif; resize: vertical; color: #000; outline: none; line-height: 1.5; }
+    .note-popup textarea:focus { border-color: #000; background: white; }
 
-    /* 🔧 Responsive tweaks for mobile */
-    @media (max-width: 768px) {
-      .note-popup {
-        width: 100vw;
-        max-width: 90vw;
-        height: auto;
-        padding: 1px;
-        box-shadow: none;
-      }
+    .save-btn { background: #000; color: #fff; border: none; padding: 8px 16px; border-radius: 100px; cursor: pointer; font-family: 'Arial', 'Times New Roman', serif; font-size: 12px; transition: background 0.2s; }
+    .save-btn:hover { background: #333; }
 
-      .leaflet-popup-content-wrapper {
-  background: white !important;
-  box-shadow: none !important;
-  border: none !important;
-  font-family: 'Times New Roman', Times, serif!important; 
-}
+    /* ── Mobile bottom sheet ─────────────────────────────────── */
+    #mobile-sheet-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 2000; align-items: flex-end; justify-content: center; }
+    #mobile-sheet-overlay.open { display: flex; }
+    #mobile-sheet { background: #fff; border-radius: 18px 18px 0 0; width: 98%; margin: 0 1%; max-height: 90vh; overflow-y: auto; padding: 20px 20px 36px; transform: translateY(100%); transition: transform 0.32s cubic-bezier(0.32,1,0.45,1); display: flex; flex-direction: column; gap: 14px; }
+    #mobile-sheet-overlay.open #mobile-sheet { transform: translateY(0); }
+    #sheet-handle { width: 40px; height: 4px; background: #000; border-radius: 2px; margin: 0 auto -6px; }
+    #sheet-header { display: flex; align-items: center; justify-content: space-between; }
+    #sheet-header h3 { margin: 0; font-family: 'Arial', 'Times New Roman', serif; font-size: 16px; color: #000; font-weight: normal; font-style: italic; }
+    #sheet-close { background: none; border: none; font-size: 22px; color: #000; cursor: pointer; line-height: 1; padding: 4px 8px; border-radius: 50%; }
+    #sheet-close:hover { background: #eee; }
+    #sheet-textarea { width: 100%; padding: 12px; border: 1px solid #000; background: white; border-radius: 10px; font-size: 16px; font-family: 'Arial', 'Times New Roman', serif; resize: none; color: #000; outline: none; line-height: 1.6; min-height: 110px; }
+    #sheet-textarea:focus { border-color: #000; }
+    #sheet-save { background: #000; color: #fff; border: none; padding: 15px; border-radius: 100px; cursor: pointer; font-family: 'Arial', 'Times New Roman', serif; font-size: 15px; width: 100%; transition: background 0.2s; min-height: 52px; }
+    #sheet-save:active { background: #333; }
 
-.leaflet-popup-tip {
-  background: transparent !important;
-  box-shadow: none !important;
-  font-family: 'Times New Roman', Times, serif!important; 
-}
+    @media (min-width: 600px) { #mobile-sheet-overlay { display: none !important; } }
 
-
-      .note-popup textarea {
-        width: 100%;
-        font-size: 16px;
-      }
-
-      .note-popup button {
-        width: 100%;
-        font-size: 16px;
-      }
-    }
+    .maplibregl-ctrl-group { background: #fff !important;  }
+    .maplibregl-ctrl-group button { background: transparent !important; }
+    .maplibregl-ctrl-attrib.maplibregl-compact { min-width: 24px; }
+    .maplibregl-ctrl-attrib-button { display: block !important; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="custom-button" onclick="dropNote()">Drop a note here</div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <div class="sync-pill" id="sync-pill">
+    <span class="sync-dot" id="sync-dot"></span>
+    <span id="sync-text">loading…</span>
+  </div>
+
+  <div class="ctrl-btn drop-btn" onclick="dropNote()">Drop a note here</div>
+  <div class="ctrl-btn toggle-btn" id="toggle-base" onclick="toggleBaseMap()">Hide base map</div>
+
+  <!-- Mobile bottom sheet -->
+  <div id="mobile-sheet-overlay">
+    <div id="mobile-sheet">
+      <div id="sheet-handle"></div>
+      <div id="sheet-header">
+        <h3>Leave a note here</h3>
+        <button id="sheet-close">×</button>
+      </div>
+      <textarea id="sheet-textarea" rows="5" placeholder="Write your note here…"></textarea>
+      <button id="sheet-save">Save Note</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-    const supabaseUrl = 'https://neesddmioeafquxfmsfc.supabase.co';
-    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5lZXNkZG1pb2VhZnF1eGZtc2ZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUxNDU5MjEsImV4cCI6MjA2MDcyMTkyMX0._n0JiCLHIv9o0kIokcDGZ3ctWoC2SP4VX_sHQOWZFFI';
+    // ─── CONFIG ────────────────────────────────────────────────────────────────
+    const supabaseUrl = 'https://owovclgqfngxektsuxcr.supabase.co';
+    const supabaseKey = 'sb_publishable_DeJSOJ2m6jzH6md1MXYpmA_JkQgH7sZ';
+    const TABLE = 'citespecific';   // ← your actual Supabase table
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const map = L.map('map', {
-      center: [0, 0],
-      zoom: 2,
-      zoomControl: false
+    // localStorage key for the offline outbox (notes saved on phone, not yet in cloud)
+    const OUTBOX_KEY = 'map-notes-outbox';
+
+    // =========================================================================
+    // 🎨  MAP PALETTE — OpenStreetMap (osm-carto) look
+    // =========================================================================
+    const COLORS = {
+      background:      "#ffffff",
+      water:           "#aad3df",
+      waterway:        "#aad3df",
+      greenSpace:      "#c8e6a0",
+      urbanArea:       "#e8e3dc",
+      building:        "#d9d0c9",
+      buildingOutline: "#c6bbb0",
+      roadMinor:       "#ffffff",
+      roadSecondary:   "#f7d5a8",
+      roadPrimary:     "#fcd6a4",
+      roadMotorway:    "#e892a2",
+      boundary:        "#ac46ac",
+    };
+    // =========================================================================
+
+    // No label layer → no external font server needed → no CORS/rate-limit issues.
+    const mapStyle = {
+      version: 8,
+      glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+      sources: {
+        openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" }
+      },
+      layers: [
+        { id: "background", type: "background", paint: { "background-color": COLORS.background } },
+        { id: "water", type: "fill", source: "openmaptiles", "source-layer": "water", paint: { "fill-color": COLORS.water } },
+        { id: "waterway", type: "line", source: "openmaptiles", "source-layer": "waterway", paint: { "line-color": COLORS.waterway, "line-width": 1 } },
+        { id: "landuse-green", type: "fill", source: "openmaptiles", "source-layer": "landuse", filter: ["in","class","park","grass","forest","nature_reserve","cemetery","meadow"], paint: { "fill-color": COLORS.greenSpace } },
+        { id: "landuse-urban", type: "fill", source: "openmaptiles", "source-layer": "landuse", filter: ["in","class","residential","commercial","industrial","retail"], paint: { "fill-color": COLORS.urbanArea } },
+        { id: "building", type: "fill", source: "openmaptiles", "source-layer": "building", minzoom: 14, paint: { "fill-color": COLORS.building, "fill-outline-color": COLORS.buildingOutline } },
+        { id: "road-minor", type: "line", source: "openmaptiles", "source-layer": "transportation", filter: ["in","class","minor","service","track","path"], paint: { "line-color": COLORS.roadMinor, "line-width": ["interpolate",["linear"],["zoom"],12,0.5,18,2] } },
+        { id: "road-secondary", type: "line", source: "openmaptiles", "source-layer": "transportation", filter: ["in","class","secondary","tertiary"], paint: { "line-color": COLORS.roadSecondary, "line-width": ["interpolate",["linear"],["zoom"],10,0.8,18,4] } },
+        { id: "road-primary", type: "line", source: "openmaptiles", "source-layer": "transportation", filter: ["in","class","primary","trunk"], paint: { "line-color": COLORS.roadPrimary, "line-width": ["interpolate",["linear"],["zoom"],8,0.8,18,6] } },
+        { id: "road-motorway", type: "line", source: "openmaptiles", "source-layer": "transportation", filter: ["==","class","motorway"], paint: { "line-color": COLORS.roadMotorway, "line-width": ["interpolate",["linear"],["zoom"],6,0.8,18,8] } },
+        { id: "boundary", type: "line", source: "openmaptiles", "source-layer": "boundary", filter: ["==","admin_level",2], paint: { "line-color": COLORS.boundary, "line-width": 0.8, "line-dasharray": [4,2] } }
+      ]
+    };
+
+    const map = new maplibregl.Map({
+      container: 'map', style: mapStyle,
+      center: [12, 45], zoom: 4, attributionControl: false
     });
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap, Carto',
-      subdomains: 'abcd',
-      maxZoom: 19
-    }).addTo(map);
-
-    // 🌐 Track user's location continuously
+    // ─── Location (approximate on desktop; accurate GPS on phone) ─────────────
     let currentPosition = null;
-
-    navigator.geolocation.watchPosition(
+    let hasCentered = false;   // becomes true once we've moved the map to the user
+    navigator.geolocation.getCurrentPosition(
       (pos) => {
         currentPosition = pos.coords;
-        if (!map._locationInitialized) {
-          map.setView([pos.coords.latitude, pos.coords.longitude], 16);
-          map._locationInitialized = true;
+        // Center on the user as soon as we have a fix (only the first time)
+        if (!hasCentered) {
+          hasCentered = true;
+          map.easeTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 14, duration: 800 });
         }
+        navigator.geolocation.watchPosition(
+          (p) => { currentPosition = p.coords; }, () => {},
+          { enableHighAccuracy: true, maximumAge: 10000 }
+        );
       },
-      (err) => {
-        console.warn("Location tracking error:", err);
-        if (!map._locationInitialized) {
-          map.setView([51.505, -0.09], 13);
-          map._locationInitialized = true;
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 5000
-      }
+      () => {}, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
     );
 
-    async function loadNotes() {
-      const { data, error } = await supabase.from('notes').select('*');
-      if (error) {
-        console.error("Load error:", error);
-        return;
-      }
+    // =========================================================================
+    // 🔠  ZOOM-DRIVEN FONT SIZE
+    // =========================================================================
+    const FONT_MIN_PX = 7, FONT_MAX_PX = 15, ZOOM_MIN = 4, ZOOM_MAX = 16;
+    const allLabelEls = [];
+    function zoomToFontSize(zoom) {
+      const t = Math.max(0, Math.min(1, (zoom - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN)));
+      return FONT_MIN_PX + t * (FONT_MAX_PX - FONT_MIN_PX);
+    }
+    function updateAllFontSizes() {
+      const size = zoomToFontSize(map.getZoom()) + 'px';
+      for (const el of allLabelEls) el.style.fontSize = size;
+    }
+    map.on('zoom', updateAllFontSizes);
 
-      data.forEach(note => showTextLabel(note.lat, note.lon, note.text));
+    const mapEl = document.getElementById('map');
+
+    // Escape any HTML so notes render as plain text (no formatting).
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
-    // Adjust font size of notes based on zoom level
-map.on('zoomend', () => {
-  const zoom = map.getZoom();
-  const scale = Math.max(0.6, Math.min(1.5, zoom / 14)); // scaling factor
-  const noteLabels = document.querySelectorAll('.note-label');
-
-  noteLabels.forEach(label => {
-    label.style.fontSize = `${scale}em`;
-  });
-});
-
     function showTextLabel(lat, lon, text) {
-  const formattedText = text
-    .split(' ')
-    .reduce((acc, word, i) => {
-      acc += word + ' ';
-      if ((i + 1) % 8 === 0) acc += '<br>';
-      return acc;
-    }, '');
+      const el = document.createElement('div');
+      el.className = 'note-label';
+      el.textContent = text;   // plain text, no HTML formatting
+      el.style.fontSize = zoomToFontSize(map.getZoom()) + 'px';
+      allLabelEls.push(el);
+      el.addEventListener('mouseenter', () => { mapEl.classList.add('labels-dimmed'); el.classList.add('is-hovered'); });
+      el.addEventListener('mouseleave', () => { mapEl.classList.remove('labels-dimmed'); el.classList.remove('is-hovered'); });
+      new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([lon, lat]).addTo(map);
+    }
 
-  const labelIcon = L.divIcon({
-    className: 'note-label',
-    html: formattedText.trim(),
-    iconSize: null,
-    iconAnchor: [0, 0]
-  });
+    // =========================================================================
+    // 🔄  SYNC STATUS PILL
+    // =========================================================================
+    const dotEl  = document.getElementById('sync-dot');
+    const textEl = document.getElementById('sync-text');
+    function setSync(state, msg) {
+      dotEl.className = 'sync-dot ' + (state || '');
+      textEl.textContent = msg;
+    }
 
-  L.marker([lat, lon], { icon: labelIcon }).addTo(map);
-}
+    // =========================================================================
+    // 📤  OFFLINE OUTBOX — notes saved on the phone but not yet in the cloud.
+    //     They show on the map immediately and re-sync whenever there's signal.
+    // =========================================================================
+    function getOutbox() {
+      try { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]'); }
+      catch (_) { return []; }
+    }
+    function setOutbox(arr) {
+      try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(arr)); } catch (_) {}
+    }
 
+    // Try to push every queued note to Supabase. Removes ones that succeed.
+    let syncing = false;
+    async function flushOutbox(showStatus = true) {
+      if (syncing) return;
+      const queue = getOutbox();
+      if (queue.length === 0) { if (showStatus) setSync('ok', 'All notes saved'); return; }
+      syncing = true;
+      if (showStatus) setSync('pending', `Syncing ${queue.length}…`);
 
-    loadNotes();
+      const remaining = [];
+      for (const note of queue) {
+        try {
+          const { error } = await supabase.from(TABLE).insert([{
+            lat: note.lat, lon: note.lon, text: note.text, created_at: note.created_at
+          }]);
+          if (error) throw error;
+        } catch (e) {
+          remaining.push(note);   // keep it for next attempt
+        }
+      }
+      setOutbox(remaining);
+      syncing = false;
 
+      if (remaining.length === 0) setSync('ok', 'All notes saved');
+      else setSync('pending', `${remaining.length} waiting for signal`);
+    }
+
+    // Save a note: show it instantly, queue it, try to sync now.
+    function addNote(lat, lon, text) {
+      const note = { lat, lon, text, created_at: new Date().toISOString() };
+      showTextLabel(lat, lon, text);           // instant on map
+      const queue = getOutbox();
+      queue.push(note);
+      setOutbox(queue);                         // safe on phone even if offline
+      flushOutbox();                            // attempt cloud save
+    }
+
+    // Retry sync when the browser regains connectivity, and periodically.
+    window.addEventListener('online', () => flushOutbox());
+    setInterval(() => flushOutbox(false), 30000);
+
+    // =========================================================================
+    // 📥  LOAD everything: history file + cloud notes, then frame the view.
+    // =========================================================================
+    async function loadAll() {
+      const pts = [];
+
+      // 1. Historical notes committed in the repo
+      try {
+        const res = await fetch('./notes.json', { cache: 'no-store' });
+        const hist = await res.json();
+        hist.forEach(n => { showTextLabel(n.lat, n.lon, n.text); pts.push(n); });
+      } catch (e) {
+        console.warn('notes.json not found (optional):', e);
+      }
+
+      // 2. Notes from the cloud database
+      try {
+        const { data, error } = await supabase.from(TABLE).select('*');
+        if (error) throw error;
+        data.forEach(n => { showTextLabel(n.lat, n.lon, n.text); pts.push(n); });
+        setSync('ok', 'All notes saved');
+      } catch (e) {
+        console.warn('Supabase load error:', e);
+        setSync('err', 'Offline');
+      }
+
+      // 3. Any queued notes not yet in the cloud (also show + try to flush)
+      const queue = getOutbox();
+      queue.forEach(n => { showTextLabel(n.lat, n.lon, n.text); pts.push(n); });
+      flushOutbox(false);
+
+      // 4. Do NOT reframe the map here — geolocation centers on the user and
+      //    we leave it there. (Fitting all notes would jump to a world view,
+      //    since the notes span multiple countries.)
+    }
+
+    map.on('load', () => {
+      loadAll();
+      const attrib = document.querySelector('.maplibregl-ctrl-attrib');
+      if (attrib) attrib.classList.add('maplibregl-compact');
+    });
+
+    // ─── Toggle base map (hides map canvas only; note markers stay) ────────────
+    let baseVisible = true;
+    window.toggleBaseMap = () => {
+      baseVisible = !baseVisible;
+      map.getCanvas().style.visibility = baseVisible ? 'visible' : 'hidden';
+      const btn = document.getElementById('toggle-base');
+      btn.textContent = baseVisible ? 'Hide base map' : 'Show base map';
+      btn.classList.toggle('active', !baseVisible);
+      document.body.classList.toggle('base-hidden', !baseVisible);
+      mapEl.style.background = baseVisible ? '#f2efe9' : '#ffffff';
+    };
+
+    // ─── Drop note: mobile sheet or desktop popup ─────────────────────────────
+    const isMobile = () => window.innerWidth < 600;
+
+    // Mobile sheet
+    const overlay   = document.getElementById('mobile-sheet-overlay');
+    const sheetTA    = document.getElementById('sheet-textarea');
+    const sheetSave  = document.getElementById('sheet-save');
+    const sheetClose = document.getElementById('sheet-close');
+    let sheetLngLat  = null;
+
+    function openSheet(lngLat) { sheetLngLat = lngLat; sheetTA.value = ''; overlay.classList.add('open'); setTimeout(() => sheetTA.focus(), 350); }
+    function closeSheet() { overlay.classList.remove('open'); }
+    sheetClose.onclick = closeSheet;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeSheet(); });
+
+    sheetSave.onclick = () => {
+      const text = sheetTA.value.trim();
+      if (!text) { sheetTA.focus(); return; }
+      addNote(sheetLngLat[1], sheetLngLat[0], text);
+      closeSheet();
+    };
+
+    // Desktop popup
+    function openDesktopPopup(lngLat) {
+      const container = document.createElement('div');
+      container.className = 'note-popup';
+
+      const heading = document.createElement('h3');
+      heading.textContent = 'Leave a note';
+      container.appendChild(heading);
+
+      const textarea = document.createElement('textarea');
+      textarea.rows = 4;
+      textarea.placeholder = "Write your note here…";
+      container.appendChild(textarea);
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'save-btn';
+      saveBtn.textContent = 'Save Note';
+      container.appendChild(saveBtn);
+
+      const popup = new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
+        .setLngLat(lngLat).setDOMContent(container).addTo(map);
+
+      saveBtn.onclick = () => {
+        const text = textarea.value.trim();
+        if (!text) return alert("Note can't be empty");
+        addNote(lngLat[1], lngLat[0], text);
+        popup.remove();
+      };
+    }
+
+    // Unified entry point — drops a note at your current location
     window.dropNote = () => {
-  if (!currentPosition) {
-    alert("Still getting your location... please try again in a moment.");
-    return;
-  }
+      if (!currentPosition) { alert("Still getting your location…"); return; }
+      const lngLat = [currentPosition.longitude, currentPosition.latitude];
+      if (isMobile()) openSheet(lngLat);
+      else openDesktopPopup(lngLat);
+    };
 
-  const latlng = [currentPosition.latitude, currentPosition.longitude];
+    // =========================================================================
+    // 📍  DROP A NOTE ANYWHERE — click (desktop) / long-press (mobile)
+    // =========================================================================
+    function openNoteAt(lngLat) {
+      if (isMobile()) openSheet(lngLat);
+      else openDesktopPopup(lngLat);
+    }
 
-  const popupContent = document.createElement('div');
-  popupContent.className = 'note-popup';
+    // Desktop: a plain click on the map drops a note there.
+    map.on('click', (e) => {
+      if (isMobile()) return;
+      openNoteAt([e.lngLat.lng, e.lngLat.lat]);
+    });
 
-  // Formatting toolbar
-  const toolbar = document.createElement('div');
-  toolbar.style.display = "flex";
-  toolbar.style.gap = "8px";
-  toolbar.style.flexWrap = "wrap";
+    // Mobile: long-press (~550ms) drops a note at the pressed point.
+    const LONG_PRESS_MS = 550;
+    const MOVE_TOLERANCE = 12;   // px of movement allowed before it's a pan
+    let pressTimer = null;
+    let pressStart = null;
 
-  const formatButtons = [
-    { label: "B", tag: "b", style: "font-weight:bold;" },
-    { label: "I", tag: "i", style: "font-style:italic;" },
-    { label: "U", tag: "u", style: "text-decoration:underline;" }
-  ];
+    const canvas = map.getCanvasContainer();
 
-  formatButtons.forEach(({ label, tag, style }) => {
-    const btn = document.createElement('button');
-    btn.innerHTML = label;
-    btn.style = style + "padding:4px 8px; cursor:pointer;";
-    btn.onclick = () => wrapSelectionWithTag(tag);
-    toolbar.appendChild(btn);
-  });
+    function clearPress() {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      pressStart = null;
+    }
 
-  // Font size dropdown
-  const sizeSelect = document.createElement('select');
-  sizeSelect.innerHTML = `
-    <option value="">Size</option>
-    <option value="12px">Small</option>
-    <option value="16px">Normal</option>
-    <option value="24px">Large</option>
-  `;
-  sizeSelect.onchange = () => {
-    const size = sizeSelect.value;
-    if (size) wrapSelectionWithSpan(size);
-  };
-  toolbar.appendChild(sizeSelect);
+    canvas.addEventListener('touchstart', (ev) => {
+      if (ev.touches.length !== 1) { clearPress(); return; }  // ignore pinch
+      const t = ev.touches[0];
+      pressStart = { x: t.clientX, y: t.clientY };
+      const point = map.unproject([
+        t.clientX - canvas.getBoundingClientRect().left,
+        t.clientY - canvas.getBoundingClientRect().top
+      ]);
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        if (navigator.vibrate) navigator.vibrate(15);
+        openNoteAt([point.lng, point.lat]);
+      }, LONG_PRESS_MS);
+    }, { passive: true });
 
-  popupContent.appendChild(toolbar);
+    canvas.addEventListener('touchmove', (ev) => {
+      if (!pressStart || !ev.touches.length) return;
+      const t = ev.touches[0];
+      const dx = t.clientX - pressStart.x;
+      const dy = t.clientY - pressStart.y;
+      if (Math.hypot(dx, dy) > MOVE_TOLERANCE) clearPress();  // it's a pan
+    }, { passive: true });
 
-  // Text color dropdown
-const colorSelect = document.createElement('select');
-colorSelect.innerHTML = `
-  <option value="">Color</option>
-  <option value="#654040">Red</option>
-  <option value="green">Green</option>
-  <option value="blue">Blue</option>
-  <option value="purple">Purple</option>
-`;
-colorSelect.onchange = () => {
-  const color = colorSelect.value;
-  if (color) wrapSelectionWithColor(color);
-};
-toolbar.appendChild(colorSelect);
-
-
-  // Text area
-  const textarea = document.createElement('textarea');
-  textarea.rows = 4;
-  textarea.cols = 30;
-  textarea.placeholder = "Write your note here...";
-  popupContent.appendChild(textarea);
-
-  const button = document.createElement('button');
-  button.textContent = "Save Note";
-  popupContent.appendChild(button);
-
-  const marker = L.marker(latlng).addTo(map).bindPopup(popupContent, {
-    maxWidth: "auto"
-  }).openPopup();
-
-  // Helper functions to wrap selected text
-  function wrapSelectionWithTag(tag) {
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = textarea.value.substring(start, end);
-    const before = textarea.value.substring(0, start);
-    const after = textarea.value.substring(end);
-    textarea.value = `${before}<${tag}>${selected}</${tag}>${after}`;
-  }
-
-  function wrapSelectionWithColor(color) {
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const selected = textarea.value.substring(start, end);
-  const before = textarea.value.substring(0, start);
-  const after = textarea.value.substring(end);
-  textarea.value = `${before}<span style="color:${color}">${selected}</span>${after}`;
-}
-
-  function wrapSelectionWithSpan(size) {
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = textarea.value.substring(start, end);
-    const before = textarea.value.substring(0, start);
-    const after = textarea.value.substring(end);
-    textarea.value = `${before}<span style="font-size:${size}">${selected}</span>${after}`;
-  }
-
-button.onclick = async () => {
-  const text = textarea.value.trim(); // 👈 Place this line here
-
-  if (!text) return alert("Note can't be empty");
-
-  const { error } = await supabase.from('notes').insert([
-    { lat: latlng[0], lon: latlng[1], text } // ✅ This will include your HTML formatting
-  ]);
-
-  if (error) {
-    console.error("Save error:", error);
-    alert("Could not save note.");
-  } else {
-    marker.remove();
-    showTextLabel(latlng[0], latlng[1], text); // ✅ Pass the raw HTML to render
-  }
-};
-};
-
+    canvas.addEventListener('touchend', clearPress, { passive: true });
+    canvas.addEventListener('touchcancel', clearPress, { passive: true });
   </script>
 </body>
 </html>
