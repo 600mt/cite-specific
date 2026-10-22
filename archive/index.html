@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="img/favicon.jpg" type="image/jpg">
+    <title>Matteo Bettini Archive</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            line-height: 1.2;
+            min-height: 100vh;
+            color: black;
+        }
+
+        ::selection { background-color: #ffea00; }
+        a { color: inherit;  }
+
+        #footer {
+            position: fixed; top: 20px; left: 5px; width: calc(100vw - 80px); transform: rotate(2deg);
+            color: black; font-size: 1.05em; line-height: 1.2;
+            mix-blend-mode: normal; z-index: 100; pointer-events: none;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        #footer a { color: inherit; text-decoration: underline; pointer-events: all; }
+
+        #content {
+            padding-left: 280px;
+            padding-bottom: 10vh;
+            font-size: 0.95em;
+            padding-top:-300px;
+        }
+
+        .group-header {
+            font-family: times, serif;
+            color: rgb(0, 0, 0);
+            margin-top: 1.8em;
+            margin-bottom: 0.1em;
+            font-size: 0.85em;
+            letter-spacing: 0.2rem;
+        }
+
+        #name {
+            letter-spacing: 0.2rem;
+        }
+
+        .item {
+            display: grid;
+            grid-template-columns: 2.2fr 3.5fr;
+            column-gap: 2rem;
+        }
+        .item.upcoming { opacity: 0.3; }
+
+        .item-name { display: inline; color: black; }
+        .item-meta { display: inline; color: rgb(174, 174, 174); }
+        .item-meta::before { content: ' '; }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 2vw;
+                padding-top: 130px;
+                padding-bottom: 20px;
+            }
+            #footer {
+                width: 100vw; font-size: .89em; line-height: 1.2;
+                padding-left: env(safe-area-inset-left, 1px);
+                padding-right: env(safe-area-inset-right, 0px);
+                padding-bottom: 0;
+            }
+            #content {
+                padding-left: 2vw;
+                font-size: 0.80em;
+                line-height: 1.2;
+            }
+            .item { grid-template-columns: 2fr 3fr;
+            column-gap: 0.5rem;
+         }
+        }
+    </style>
+</head>
+<body>
+
+    <p id="footer">
+        <span id="name">Matteo Bettini</span><br>
+        Information design and artistic practice<br>
+        Rotterdam (NL), Jul 2026<br>
+        <a href="mailto:mte.bettini@gmail.com">mte.bettini@gmail.com</a><br>
+        <!-- <a href="https://www.instagram.com/600mt/">Instagram</a><br> -->
+        <a href="../">← Back</a>
+
+    </p>
+
+    <div id="content"></div>
+
+    
+    <script>
+        const data = [
+            { type:'presentation', name:'New Approaches to Critical Geovisualisation', year:'2026', month:6, location:'Halle, DE', details:'Burg Halle', link:'https://www.burg-halle.de/artikel/a/neue-ansaetze-kritischer-geovisualisierung-2026' },
+            { type:'workshop', name:'JPG Investigation Unit', year:'2026', month:3, location:'Milan, IT', details:'Accademia Aldo Galli', link:'' },
+            { type:'residency', name:'-1 Digital Lab Residency', year:'2026', month:3, location:'Rotterdam, NL', details:'Het Nieuwe Instituut', link:'' },
+            { type:'exhibition', name:'Shadow Circuits', year:'2026', month:3, location:'Rotterdam, NL', details:'MaMA', link:'' },
+            { type:'exhibition', name:'To The Horizon', year:'2026', month:2, location:'Warsaw, PL', details:'Aspekty Gallery. Collaborator: Sonia Gorecka', link:'' },
+            { type:'writing', name:'A Place Without a Name', year:'2026', month:1, location:'', details:'Metamorphic Zone', link:'https://metamorphiczone.com/field-notes/a-place-without-a-name' },
+            { type:'web-site', name:'Literary Atlas of Volcanic and seismic Activities', year:'2025', month:12, location:'', details:'Collaborators: Federico Poni, Henry Albert, Alice Bisio', link:'https://prisma.fileli.unipi.it/' },
+            { type:'exhibition', name:'Fuori Pista/Off-track', year:'2025', month:11, location:'Bergamo, IT', details:'GresArt 671, together with <a href="https://www.studiofolder.it">Studio Folder</a>', link:'' },
+            { type:'exhibition', name:'Where to, from Here?', year:'2025', month:6, location:'Torino, IT', details:'Circolo del Design, together with <a href="https://www.studiofolder.it">Studio Folder</a>', link:'' },
+            { type:'exhibition', name:'Always Container, Sometimes Contained', year:'2025', month:6, location:'Rotterdam', details:'Oud House, part of Rotterdam Architecture Month 2025', link:'' },
+            { type:'funding', name:'Practical Contribution', year:'2025', month:5, location:'Rotterdam, NL', details:'CBK Rotterdam', link:'' },
+            { type:'exhibition', name:'Emergence', year:'2025', month:4, location:'Genova, IT', details:'Palazzo Bronzo. Collaborator: Sonia Gorecka', link:'' },
+            { type:'web-site', name:'Transmedia Research Institute', year:'2025', month:4, location:'', details:'Collaborator: Sonia Gorecka', link:'https://www.transmediaresearch.institute/2025' },
+            { type:'funding', name:'Matching fund with Voordekunst', year:'2025', month:3, location:'Rotterdam, NL', details:'Het Cultuurfonds', link:'' },
+            { type:'workshop', name:'Ultra Paesaggio Continuo: Photo-finish e osservatori mobili', year:'2025', month:3, location:'Torino, IT', details:'Circolo del Design, together with <a href="https://www.4khd.pro">4KHD</a>', link:'' },
+            { type:'lecture', name:'Data Fragments', year:'2024', month:11, location:'Mendrisio, CH', details:'SUPSI. Together with <a href="https://www.studiofolder.it">Studio Folder</a>', link:'' },
+            { type:'workshop', name:'Ultra Paesaggio Continuo: Laboratorio di immagini in movimento', year:'2024', month:10, location:'Treviso, IT', details:'Lost APS, together with <a href="https://www.4khd.pro">4KHD</a>', link:'' },
+            { type:'exhibition', name:'All in! Re-Designing Democracy', year:'2024', month:5, location:'Bonn, DE', details:'Bundeskunsthalle, together with <a href="https://www.studiofolder.it">Studio Folder</a>', link:'' },
+            { type:'workshop', name:'Anti-Navigation Tools', year:'2024', month:2, location:'Berlin, DE', details:'EKA Stand-in School, together with <a href="https://www.4khd.pro">4KHD</a>', link:'https://stand-in.eka-gd-ma.ee/' },
+            { type:'web-site', name:'Frontiere della Transizione', year:'2023', month:12, location:'', details:'Collaborator: Alberto Valz Gris, Luca Draisci', link:'https://frontieredellatransizione.it/' },
+            { type:'presentation', name:"Racconti dai margini dell'urbanizzazione", year:'2023', month:7, location:'Milan, IT', details:"Società Studi Geografici", link:'' },
+            { type:'web-site', name:'Xenoplex, Antikythera 2023', year:'2023', month:4, location:'', details:'Collaborators: Jennifer Carniel, Filippo Elgorni', link:'https://xenoplex.org/' },
+            { type:'workshop', name:'Archiving Memories Workshop', year:'2022', month:2, location:'Rotterdam, NL', details:'Hogeschool Rotterdam', link:'' },
+            { type:'teaching', name:'Digital Methods Winter/Summer School', year:'2022-2025', month:1, location:'Amsterdam, NL', details:'University of Amsterdam', link:'https://www.digitalmethods.net/' },
+            { type:'teaching', name:'Density Design', year:'2020/21', month:9, location:'Milano, IT', details:'Politecnico di Milano, Teaching assistant', link:'https://densitydesign.org/' }
+        ];
+
+        data.sort((a, b) => {
+            const yearA = parseInt(a.year.split('/')[0]) || 0;
+            const yearB = parseInt(b.year.split('/')[0]) || 0;
+            if (yearB !== yearA) return yearB - yearA;
+            return (b.month || 0) - (a.month || 0);
+        });
+
+        function isUpcoming(item) {
+            const now = new Date();
+            const cy = now.getFullYear(), cm = now.getMonth() + 1;
+            const iy = parseInt(item.year.split('/')[0].split('-')[0]) || 0;
+            const im = item.month || 1;
+            return iy > cy || (iy === cy && im > cm);
+        }
+
+        function getLink(item) {
+            if (item.link && item.link.trim()) return item.link;
+            const m = item.name.match(/href="(https?:[^"]+)"/);
+            return m ? m[1] : null;
+        }
+
+        function getDisplayName(item) {
+            const plain = item.name.replace(/<[^>]+>/g, '');
+            const link = getLink(item);
+            if (link) return `<a href="${link}" target="_blank">${plain}</a>`;
+            return plain;
+        }
+
+        const groupDefs = [
+            { label: 'Exhibitions',                 types: ['exhibition'] },
+            { label: 'Workshops, Teaching',         types: ['workshop', 'teaching'] },
+            { label: 'Presentations, Lectures',     types: ['lecture','presentation'] },
+            { label: 'Residencies, Funding',        types: ['residency','funding'] },
+            { label: 'Projects',                    types: ['projects'] },
+            { label: 'Web sites',                   types: ['web-site'] },
+            { label: 'Writing',                     types: ['writing'] },
+        ];
+
+        let html = '';
+        groupDefs.forEach(group => {
+            const items = data.filter(i => i.showInAll !== false && group.types.includes(i.type));
+            if (!items.length) return;
+            html += `<div class="group-header">${group.label}</div>`;
+            items.forEach(item => {
+                const u = isUpcoming(item);
+                const meta = [item.details, item.location, item.year].filter(Boolean).join(', ');
+                html += `<div class="item${u ? ' upcoming' : ''}">`;
+                html += `<span class="item-name">${getDisplayName(item)}</span>`;
+                html += `<span class="item-meta">${meta}</span>`;
+                html += '</div>';
+            });
+        });
+        document.getElementById('content').innerHTML = html;
+    </script>
+</body>
+</html>

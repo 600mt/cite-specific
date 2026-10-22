@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Data Editor</title>
+<style>
+  :root {
+    --bg: #16171a;
+    --panel: #1f2024;
+    --panel-2: #26272c;
+    --line: #34353b;
+    --line-soft: #2b2c31;
+    --text: #e6e6e8;
+    --muted: #9a9ba1;
+    --faint: #6b6c72;
+    --accent: #7ea7ff;
+    --accent-dim: #3a4a6b;
+    --danger: #d16a6a;
+    --ok: #6ec18a;
+    --field: #14151806;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 22px;
+    background: rgba(22,23,26,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 {
+    font-size: 15px; font-weight: 600; margin: 0;
+    letter-spacing: .2px;
+  }
+  header .count { color: var(--faint); font-size: 12.5px; }
+  header .src {
+    font-size: 11.5px; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid var(--line); color: var(--muted);
+  }
+  header .src.file { color: var(--ok); border-color: #35513f; }
+  header .src.embedded { color: var(--faint); }
+  header .spacer { flex: 1; }
+  .btn {
+    font: inherit; font-size: 13px;
+    color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 7px; cursor: pointer;
+    transition: background .12s, border-color .12s;
+  }
+  .btn:hover { background: #303138; border-color: #45464d; }
+  .btn.primary { background: var(--accent-dim); border-color: #4a5f8a; color: #dfe8ff; }
+  .btn.primary:hover { background: #45577f; }
+  .btn.ghost { background: transparent; }
+  .btn.small { padding: 5px 10px; font-size: 12px; }
+  .btn.danger { color: var(--danger); border-color: #4a3232; }
+  .btn.danger:hover { background: #3a2727; }
+
+  main { max-width: 1000px; margin: 0 auto; padding: 22px; }
+
+  .project {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .p-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 16px; cursor: pointer;
+    user-select: none;
+  }
+  .p-head:hover { background: var(--panel-2); }
+  .p-head .caret {
+    color: var(--faint); font-size: 11px; width: 12px;
+    transition: transform .15s;
+  }
+  .project.open .p-head .caret { transform: rotate(90deg); }
+  .p-head .key {
+    color: var(--accent); font-size: 12.5px;
+  }
+  .p-head .ttl {
+    color: var(--text); flex: 1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+  .p-head .imgcount { color: var(--faint); font-size: 12px; }
+
+  .p-body { display: none; padding: 4px 16px 18px; border-top: 1px solid var(--line-soft); }
+  .project.open .p-body { display: block; }
+
+  .field { margin-top: 16px; }
+  .field > label {
+    display: block; color: var(--muted); font-size: 12px;
+    margin-bottom: 6px; letter-spacing: .3px;
+  }
+  .field .hint { color: var(--faint); font-size: 11px; margin-left: 6px; }
+
+  input[type=text], textarea {
+    width: 100%; font: inherit;
+    color: var(--text); background: #16171b;
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 9px 11px; resize: vertical;
+  }
+  input[type=text]:focus, textarea:focus {
+    outline: none; border-color: var(--accent-dim); background: #181a1f;
+  }
+  textarea.body { min-height: 120px; line-height: 1.6; }
+  textarea.meta { min-height: 62px; }
+
+  /* content blocks (text + images, in display order) */
+  .blocklist { display:flex; flex-direction:column; gap:7px; }
+  .block {
+    display:flex; align-items:flex-start; gap:8px;
+    background:#1b1c20; border:1px solid var(--line-soft);
+    border-radius:7px; padding:7px;
+  }
+  .block .drag {
+    color:var(--faint); cursor:grab; padding:6px 2px 0; font-size:13px;
+    user-select:none;
+  }
+  .block .kind {
+    width:38px; flex:none; padding-top:7px;
+    color:var(--faint); font-size:11px;
+  }
+  .block.text .kind { color:#c9b37e; }
+  .block .main { flex:1; min-width:0; display:flex; gap:8px; align-items:flex-start; }
+  .block.text textarea { min-height:70px; line-height:1.6; font-family:ui-sans-serif, system-ui, sans-serif; }
+  .block .src { flex:2; }
+  .block .cap { flex:1.4; }
+  .block .cap::placeholder { color:var(--faint); }
+  .block .thumb {
+    width:52px; height:36px; flex:none; border-radius:4px;
+    background:#16171b center/cover no-repeat; border:1px solid var(--line-soft);
+  }
+  .block .acts { display:flex; gap:2px; flex:none; }
+  .block.dragging { opacity:.4; }
+  .x.mv { font-size:13px; padding:4px 6px; }
+  .x.mv:hover { color:var(--text); background:#2a2b31; }
+  .x.split, .x.link { font-size:11.5px; padding:5px 7px; }
+  .x.split:hover, .x.link:hover { color:var(--accent); background:#232837; }
+
+  /* text block: textarea + the list of links found in it */
+  .block .textcol { flex:1; min-width:0; }
+  .block .links { margin-top:5px; font-size:11px; line-height:1.5; color:var(--faint); }
+  .block .links:empty { display:none; }
+  .block .links div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .block .links .ok-url { color:var(--accent); }
+  .block .links .bad { color:var(--danger); }
+
+  .x {
+    color: var(--faint); background: none; border: none; cursor: pointer;
+    font-size: 16px; padding: 2px 6px; line-height: 1; border-radius: 5px;
+  }
+  .x:hover { color: var(--danger); background: #2a2226; }
+
+  .rowtools { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .p-foot {
+    display: flex; justify-content: flex-end; margin-top: 18px;
+    padding-top: 14px; border-top: 1px solid var(--line-soft);
+  }
+
+  .keyedit { display: flex; align-items: center; gap: 8px; }
+  .keyedit input { max-width: 260px; }
+
+  #toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #2a2c31; border: 1px solid var(--line);
+    color: var(--text); padding: 10px 18px; border-radius: 8px;
+    font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: #35513f; }
+  #toast.err { border-color: #513535; }
+
+  .empty { color: var(--faint); text-align: center; padding: 40px; }
+  code.inl { background: #26272c; padding: 1px 5px; border-radius: 4px; color: #c8c9cf; }
+
+  /* related works picker */
+  .relatedlist {
+    display: flex; flex-wrap: wrap; gap: 7px;
+  }
+  .relatedlist label {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: #16171b; border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 12px 6px 10px;
+    cursor: pointer; color: var(--muted);
+    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12.5px;
+    transition: border-color .12s, color .12s, background .12s;
+    max-width: 100%;
+  }
+  .relatedlist label:hover { border-color: #45464d; color: var(--text); }
+  .relatedlist label.on {
+    color: #dfe8ff; border-color: #4a5f8a; background: var(--accent-dim);
+  }
+  .relatedlist input { accent-color: var(--accent); margin: 0; }
+  .relatedlist .rl-ttl {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px;
+  }
+  .relatedlist .rl-key { color: var(--faint); font-size: 11px; }
+  .relatedlist label.on .rl-key { color: #aebbdd; }
+  .relatedlist .rl-none { color: var(--faint); font-size: 12px; padding: 4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Project Data Editor</h1>
+  <span class="count" id="count"></span>
+  <span class="src" id="srcBadge"></span>
+  <span class="spacer"></span>
+  <button class="btn ghost small" id="expandAll">Expand all</button>
+  <button class="btn ghost small" id="collapseAll">Collapse all</button>
+  <button class="btn" id="openFile">Open file…</button>
+  <input type="file" id="fileInput" accept=".js,text/javascript" style="display:none">
+  <button class="btn" id="addProject">+ Project</button>
+  <button class="btn primary" id="download">Download .js</button>
+</header>
+
+<main id="list"></main>
+
+<div id="toast"></div>
+
+<!-- Optional auto-load: if this file sits next to projects-data.js, that file
+     sets window.PROJECTS and the editor picks it up on load. If it isn't there,
+     the tag fails silently and the embedded snapshot below is used instead. -->
+<script src="projects-data.js" onerror="window.__AUTOLOAD_FROM_FILE=false"
+        onload="window.__AUTOLOAD_FROM_FILE=(typeof window.PROJECTS==='object')"></script>
+
+<script>
+// ---- Embedded fallback snapshot (from your projects-data.js) ----
+const EMBEDDED_PROJECTS = {
+  'viewing-conditions': {
+    title: 'Viewing Conditions',
+    meta: ['Nieuwe Instituut, Rotterdam', 'In collaboration with Sonia Gorecka', '2026'],
+    body: '"Viewing Conditions" is a video installation developed by Matteo Bettini and Sonia Gorecka during the Nieuwe Instiuut Digital Lab -1 residency. This work is part of the larger corpus of work titled "22.86 x 11.43 x 11.43", in which Matteo and Sonia retrace the history of an erratic stone located in the north-western Italian Alps, at the foot of Mottarone. Once a natural landmark and spiritual site, the boulder was gradually dismantled over the last century for the extraction of its valuable pink granite. Today, only its name on maps, fragments from the cutting process, and traces within local memory remain. Erratic boulders, rocks displaced from their original geological context, have long been surrounded by myths and stories attempting to explain their unusual presence and movement. Through archival material, geological research, microscopic imaging, and conversations with local inhabitants, the project explores the changing material and cultural relationships surrounding the lost formation. \n\n In "Viewing Conditions", microscopic images examine granite at a crystalline scale, using one of the few surviving fragments of the original boulder as both subject and medium.\n The installation reflects on the parallel between cutting stone for extraction and cutting it for observation, considering seeing and measuring as preconditions for different forms of value production. While one produces material value and the other scientific knowledge, both transform the stone through acts of division. Rather than recovering the lost landmark, Viewing Conditions proposes another image of it, treating the stone as an optical interface through which its hidden structures become visible.',
+    images: ['img/viewingconditions_9.jpg', 'img/viewingconditions_8.jpg', 'img/viewingconditions_7.jpg', 'img/viewingconditions_13.jpg', 'img/viewingconditions_10.jpg', 'img/viewingconditions_11.jpg', 'img/viewingconditions_12.jpg'],
+  },
+  'shadow-circuits': {
+    title: 'I was sure I would find it here, or at least there. Instead, it was only a drawing, visible in fragments and larger than the Earth itself',
+    meta: ['Shadow Circuits, MaMA Rotterdam', '2026'],
+    body: 'Aluminium pipes, survey markers, and improvised measuring tools: precise, directional, indifferent to terrain. Fragments of paper are pinned to the floor, each pointing to its smallest coloured spot, and toward a place presumed to lie exactly beneath it. I set out along a natural gas pipeline almost invisible in the landscape. For several weeks I followed the poles marking its buried route: cartographic remnants left behind so that mapmakers could relocate what had first been drawn on paper. The path stretched roughly the distance between my home country and the one where I now live.\n\nPipelines transformed transport by moving matter underground, beyond weather, terrain, and human labour. Unlike trains, they carry only things, never people: a frictionless system built for speed and efficiency. Early resistance from transport workers even forced companies to bury the infrastructure, hiding the movement of matter from sight. Today these vast underground networks remain visible only through scattered stakes and coded markers, unreadable to most. Cutting across mountains, rivers, and cities in straight lines, pipelines follow the logic of the map rather than the ground itself. What they leave behind is purely cartographic: coordinates, symbols, traces. The poles become physical fragments of the map, ruins of the drawing that came before the landscape.',
+    images: [
+      { src: 'img/mam_2.jpg', caption: '' },
+      { src: 'img/mam_4.jpg', caption: '' },
+      'img/mam_3.jpg',
+    ],
+  },
+  'agreat': {
+    title: 'A great place for a ride',
+    meta: ['2023'],
+    body: 'Miguel, a fictional motorbike enthusiast born and raised close to the forest of Leiria in Portugal, is sharing his personal knowledge, built from google maps user comments and an offline interview, about this place, while riding his quad among the trees. \n The national forest of Leiria, known for its beauty, unspoilt nature and place for leisure activities, between the lines of his personal story, hides traces of a lucrative and artificial past. The overview described by Miguel is built around three main recurrent topics, that take shapes in three different chapters: [the sand-the greatness] the origin of the forest, planted by the king to defend the inner countryside and the people; [the fires-the beauty] the fires happening today, a dramatic but obvious consequence, for Miguel, of corrupted politics; [the wood-the pride] the wood and its usage through history for ship-caravels building. All these narratives make the forest a national pride to defend, but in the end today, for Miguel, is just a playground for his rides. \n The information told by Miguel are simplified stories based on popular and oral narratives that sometimes also clash with each other: the greatness of king Denis, the golden age of portugal discoveries, the pure nature of the forest. The script is non-linear, mocking a real conversation, jumping from nostalgic to angry tone and repeating to the limit the same concepts all over the video. Finally the action of Miguel, riding his quad, unveils the present status of the forest and its ultimate perception: just a great place for a ride.',
+    images: ['img/Agreat_1.jpg', 'img/Agreat_2.jpg', 'img/Agreat_3.jpg'],
+  },
+  'ppv': {
+    title: 'Perfect-Perfect-View',
+    meta: ['Oud House, Rotterdam', '2025'],
+    body: '',
+    images: ['img/ppv_1.jpg', 'img/ppv_3.jpg', 'img/ppv_5.jpg'],
+  },
+  '22x11x11': {
+    title: '22.86 × 11.43 × 11.43',
+    meta: ['2023–now', 'In collaboration with Sonia Gorecka'],
+    body: '',
+    images: ['img/22_1.jpg', 'img/22_2.jpg', 'img/22x11x11_3.jpg', 'img/22x11x11_4.jpg', 'img/22x11x11_x.jpg'],
+  },
+  'where-to': {
+    title: 'Fragments of Democracy II',
+    meta: ['Circolo del Design, Turin', 'In collaboration with Studio Folder', '2025'],
+    body: 'Fragments of Democracy II is a data projection on 3D-printed diagrams presenting a series of indices on press freedom in Italy. A synthetic and experimental gnomonic device that uses projection mapping to provide a narrative for collective reading. A video essay, while activating the structure on the wall, explores the role of data visualisation in making complex and intangible phenomena visible as public display, using the diagram as a tool to stimulate deeper reflection on the state of information. The project focuses on a crucial issue in every democracy: freedom of the press, specifically in Italy over the past two years. This theme has returned to the centre of attention due to events that have undermined its stability and protection. The installation brings to light what too often remains on the margins of public debate, highlighting the dynamics that influence access to information. Ultimately, it demonstrates how looking at a picture all together can act as a catalyst for dialogue—not only to tell the story, but also to help protect democracy in critical moments.',
+    images: ['img/dem2_5.jpg', 'img/dem2_screen_3.jpg', 'img/dem2_screen_4.jpg', 'img/dem2_screen_5.jpg', 'img/dem2_screen_6.jpg', 'img/dem2_3.jpg'],
+  },
+  'fragments-democracy': {
+    title: 'Fragments of Democracy I',
+    meta: ['Bundeskunsthalle, Bonn', 'In collaboration with Studio Folder', '2024'],
+    body: 'Over history, natural metaphors and images have been often used to represent virtues of political life, ideals of progress and, more recently, democratic principles. Thirteen data sculptures address fundamental questions on the ways in which contemporary democracies came to be, how they function, and their fragility in the face of the turbulent contemporary climate-both natural and political. They are shaped by the overlay of hundreds of open-source political, historical, and climate datasets on a variety of materials, by eroding, sedimenting, depositing, and encrusting information-terms that are often used both to describe the current crisis of Western democracies, and to define the natural processes that are quickly changing the Earth’s surface, contributing to reveal the many shortcomings of current political structures. \n\n Appearing both as fragments from a distant past and archetypes of the near future, these pieces and their accompanying texts provide a reflection on the role of information within democratic systems, and on the relationships between institutions and transparency. They speak both the language of abstract images and of accurate visualisations of data, suggesting that every statistics, census, or survey (the means through which our public life is usually measured and assessed) need to be contextualised and interpreted in order to play a role in the public arena.',
+    images: ['img/FragmentsofDemocracy_2.jpg', 'img/FragmentsofDemocracy_3.jpg', 'img/FragmentsofDemocracy_4.jpg'],
+  },
+  'gas-route': {
+    title: 'The Gas Route',
+    meta: ['2023–now'],
+    body: '',
+    images: ['img/TheGasRoute_4.jpg', 'img/TheGasRoute_5.jpg', 'img/TheGasRoute_7.png'],
+  },
+  'ilsignore': {
+    title: 'Il signore che viene da lontano',
+    meta: ['2023'],
+    body: '',
+    images: ['img/video-travel/1.jpg', 'img/video-travel/2.jpg', 'img/video-travel/3.jpg', 'img/video-travel/4.jpg', 'img/video-travel/5.jpg', 'img/video-travel/6.jpg', 'img/video-travel/7.jpg', 'img/video-travel/8.jpg', 'img/video-travel/9.jpg', 'img/video-travel/10.jpg', 'img/video-travel/11.jpg', 'img/video-travel/12.jpg', 'img/video-travel/13.jpg', 'img/video-travel/14.jpg', 'img/video-travel/15.jpg', 'img/video-travel/16.jpg', 'img/video-travel/17.jpg', 'img/video-travel/18.jpg', 'img/video-travel/19.jpg', 'img/video-travel/20.jpg', 'img/video-travel/21.jpg', 'img/video-travel/22.jpg', 'img/video-travel/23.jpg', 'img/video-travel/24.jpg', 'img/video-travel/25.jpg', 'img/video-travel/26.jpg', 'img/video-travel/27.jpg', 'img/video-travel/28.jpg', 'img/video-travel/29.jpg', 'img/video-travel/30.jpg'],
+  },
+  'algo': {
+    title: 'Algorithmic Memories',
+    meta: ['2021'],
+    body: 'Hidden behind devices simple interfaces, algorithms silently mediate the creation of future memories. Choosing which photos to draw out and which to hide, they analyze through machine learning the contents of each image, in search of the perfect memory. \n By examining the influence of algorithms on my personal images, the thesis project reuses the observed algorithmic behavior and choices to create new communication artifacts, with a double purpose: visualizing the effect of the algorithm and enable an active collaboration between the designer and the machine.',
+    images: [''],
+  },
+  'a-place': {
+    title: 'A Place Without a Name',
+    meta: ['2023-2026'],
+    body: 'Names do not simply describe places; they shape the ways we perceive, approach, and relate to the world. The Italo-Swiss Monte Rosa massif, due to its altitude and inaccessibility, remained for centuries one of the least known and largely unnamed regions of the European continent. What once existed as an indistinct and distant territory is today densely covered by hundreds of names, symbols, routes, and measurements attempting to define, classify, and enclose the mountain. \n\n This project traces the slow and surprisingly recent process through which the high alpine landscape became visible, recognizable, and ultimately governable through cartography and language. Through a toponymic map of the massif, it examines how naming transforms the unknown into something culturally and politically legible, revealing how maps do not merely reflect territory but actively produce it. \n\n Following the emergence of paths, glaciers, peaks, shelters, and borders across different historical maps, the work investigates the relationship between exploration, representation, and conquest. The mountain appears not as a fixed geographical object, but as a landscape progressively constructed through acts of measurement, orientation, and naming. What was once a place without names became fragmented into a dense surface of references and coordinates, where every feature demands identification. \n By focusing on a situated case, the project reflects more broadly on how humans confront unfamiliar environments: reducing distance through representation, transforming uncertainty into knowledge, and translating territory into language. The map becomes both a document of discovery and a tool through which the unknown is gradually occupied.',
+    images: ['img/SpitzeOhneName_2.jpg', 'img/SpitzeOhneName_1.jpg', 'img/aplace_2.jpg', 'img/aplace_3.jpg'],
+  },
+};
+
+// ---- Working model: ordered array of {key, title, meta[], body, images[{src,caption}]} ----
+// Normalize a raw PROJECTS object into the working model.
+// Split a body string into paragraphs at blank lines (single line breaks stay inside a paragraph).
+function splitParas(body) {
+  return String(body || '').replace(/\r/g, '')
+    .split(/\n\s*\n/)
+    .map(par => par.split('\n').map(l => l.trim()).join('\n').trim())
+    .filter(Boolean);
+}
+
+// Ordered content blocks: {type:'text', text} | {type:'image', src, caption}.
+// Uses `content` when present; older entries are built from body paragraphs + images.
+function toBlocks(p) {
+  if (Array.isArray(p.content)) {
+    return p.content.map(item => {
+      if (typeof item === 'string') return { type: 'image', src: item, caption: '' };
+      if (item && typeof item.text === 'string') return { type: 'text', text: item.text };
+      if (item && typeof item === 'object') return { type: 'image', src: item.src || '', caption: item.caption || '' };
+      return null;
+    }).filter(Boolean);
+  }
+  const blocks = splitParas(p.body).map(text => ({ type: 'text', text }));
+  (p.images || []).forEach(img => {
+    const e = typeof img === 'string' ? { src: img, caption: '' } : { src: img.src || '', caption: img.caption || '' };
+    if (e.src.trim()) blocks.push({ type: 'image', src: e.src, caption: e.caption });
+  });
+  return blocks;
+}
+
+function toModel(projects) {
+  return Object.entries(projects).map(([key, p]) => ({
+    key,
+    title: p.title || '',
+    meta: Array.isArray(p.meta) ? p.meta.slice() : [],
+    blocks: toBlocks(p),
+    related: Array.isArray(p.related) ? p.related.slice() : [],
+  }));
+}
+
+const imgCount  = p => p.blocks.filter(b => b.type === 'image' && b.src.trim()).length;
+const textCount = p => p.blocks.filter(b => b.type === 'text' && b.text.trim()).length;
+const countLabel = p => textCount(p) + ' txt · ' + imgCount(p) + ' img';
+
+// Source priority: a projects-data.js loaded next to this file wins; otherwise the embedded snapshot.
+let model, dataSource;
+if (window.__AUTOLOAD_FROM_FILE && window.PROJECTS && typeof window.PROJECTS === 'object') {
+  model = toModel(window.PROJECTS);
+  dataSource = 'file';
+} else {
+  model = toModel(EMBEDDED_PROJECTS);
+  dataSource = 'embedded';
+}
+
+const listEl = document.getElementById('list');
+const openState = {}; // key -> bool
+
+function toast(msg, kind) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + (kind || '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.className = ''; }, 2200);
+}
+
+function updateCount() {
+  const n = model.length;
+  const imgs = model.reduce((s, p) => s + imgCount(p), 0);
+  document.getElementById('count').textContent = n + ' project' + (n===1?'':'s') + ' · ' + imgs + ' images';
+}
+
+function render() {
+  listEl.innerHTML = '';
+  if (!model.length) {
+    listEl.innerHTML = '<div class="empty">No projects. Use <b>+ Project</b> to add one.</div>';
+    updateCount(); return;
+  }
+  model.forEach((p, idx) => listEl.appendChild(renderProject(p, idx)));
+  fitTextareas(listEl);
+  updateCount();
+}
+
+function renderProject(p, idx) {
+  const wrap = document.createElement('div');
+  wrap.className = 'project' + (openState[p.key] ? ' open' : '');
+
+  // header
+  const head = document.createElement('div');
+  head.className = 'p-head';
+  head.innerHTML =
+    '<span class="caret">▶</span>' +
+    '<span class="key">' + esc(p.key) + '</span>' +
+    '<span class="ttl">' + esc(p.title || '(untitled)') + '</span>' +
+    '<span class="imgcount">' + countLabel(p) + '</span>';
+  head.addEventListener('click', () => {
+    openState[p.key] = !openState[p.key];
+    wrap.classList.toggle('open');
+    fitTextareas(wrap);
+  });
+  wrap.appendChild(head);
+
+  // body
+  const body = document.createElement('div');
+  body.className = 'p-body';
+
+  // key
+  body.appendChild(field('Key', '(id used in URLs — must be unique)', () => {
+    const w = document.createElement('div'); w.className = 'keyedit';
+    const inp = document.createElement('input'); inp.type='text'; inp.value=p.key;
+    inp.addEventListener('change', () => {
+      const nk = inp.value.trim();
+      if (!nk) { inp.value = p.key; toast('Key cannot be empty', 'err'); return; }
+      if (nk !== p.key && model.some(m => m.key === nk)) { inp.value = p.key; toast('Key already exists', 'err'); return; }
+      const oldKey = p.key;
+      openState[nk] = openState[p.key]; delete openState[p.key];
+      p.key = nk;
+      head.querySelector('.key').textContent = nk;
+      // keep related-work references pointing at the renamed project
+      model.forEach(m => {
+        if (m.related && m.related.includes(oldKey)) {
+          m.related = m.related.map(k => k === oldKey ? nk : k);
+        }
+      });
+    });
+    w.appendChild(inp);
+    return w;
+  }));
+
+  // title
+  body.appendChild(field('Title', '', () => {
+    const inp = document.createElement('input'); inp.type='text'; inp.value=p.title;
+    inp.addEventListener('input', () => {
+      p.title = inp.value;
+      head.querySelector('.ttl').textContent = p.title || '(untitled)';
+    });
+    return inp;
+  }));
+
+  // meta
+  body.appendChild(field('Meta', '(one line per entry — place, year, collaborators…)', () => {
+    const ta = document.createElement('textarea'); ta.className='meta';
+    ta.value = p.meta.join('\n');
+    ta.addEventListener('input', () => {
+      p.meta = ta.value.split('\n').map(s=>s.trim()).filter(s=>s.length);
+    });
+    return ta;
+  }));
+
+  // content: text paragraphs and images, in the order they appear in the side panel
+  const cField = document.createElement('div'); cField.className='field';
+  const lbl = document.createElement('label');
+  lbl.innerHTML = 'Content <span class="hint">(side panel order, top to bottom — drag ⠿ or use ↑ ↓ to reorder. Text at the top sits next to the meta. To add a hyperlink, select words and press link.)</span>';
+  cField.appendChild(lbl);
+  const list = document.createElement('div');
+  list.className = 'blocklist';
+  const refreshCount = () => { head.querySelector('.imgcount').textContent = countLabel(p); updateCount(); };
+  const ctx = { p, list, refreshCount };
+  p.blocks.forEach(b => list.appendChild(renderBlock(ctx, b)));
+  cField.appendChild(list);
+
+  const tools = document.createElement('div'); tools.className='rowtools';
+  tools.appendChild(mkBtn('+ Text', 'small', () => {
+    const obj = { type:'text', text:'' };
+    p.blocks.push(obj);
+    const row = renderBlock(ctx, obj);
+    list.appendChild(row);
+    row.querySelector('textarea').focus();
+  }));
+  tools.appendChild(mkBtn('+ Image', 'small', () => {
+    const obj = { type:'image', src:'', caption:'' };
+    p.blocks.push(obj);
+    const row = renderBlock(ctx, obj);
+    list.appendChild(row);
+    row.querySelector('.src').focus();
+  }));
+  cField.appendChild(tools);
+  body.appendChild(cField);
+
+  // related works
+  body.appendChild(field('Related works', '(shown as grey buttons under the meta on the site)', () => {
+    return renderRelatedList(p);
+  }));
+
+  // footer
+  const foot = document.createElement('div'); foot.className='p-foot';
+  const del = mkBtn('Delete project', 'small danger', () => {
+    if (!confirm('Delete project "' + (p.title||p.key) + '"?')) return;
+    const goneKey = p.key;
+    model = model.filter(m => m !== p);
+    delete openState[p.key];
+    model.forEach(m => { if (m.related) m.related = m.related.filter(k => k !== goneKey); });
+    render();
+    toast('Project deleted');
+  });
+  foot.appendChild(del);
+  body.appendChild(foot);
+
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function fitTextareas(root) {
+  requestAnimationFrame(() => root.querySelectorAll('.block.text textarea').forEach(t => t._fit && t._fit()));
+}
+
+function syncOrder(ctx) {
+  ctx.p.blocks = [...ctx.list.querySelectorAll(':scope > .block')].map(r => r._block);
+}
+
+function renderBlock(ctx, block) {
+  const { p, list, refreshCount } = ctx;
+  const row = document.createElement('div');
+  row.className = 'block ' + block.type;
+  row._block = block;
+
+  const drag = document.createElement('span');
+  drag.className = 'drag'; drag.textContent = '⠿'; drag.title = 'Drag to reorder';
+  // only the handle starts a drag, so text in the fields can still be selected
+  drag.addEventListener('mousedown', () => { row.draggable = true; });
+  drag.addEventListener('mouseup',   () => { row.draggable = false; });
+
+  const kind = document.createElement('span');
+  kind.className = 'kind'; kind.textContent = block.type === 'text' ? 'text' : 'image';
+
+  const main = document.createElement('div'); main.className = 'main';
+  const acts = document.createElement('div'); acts.className = 'acts';
+
+  if (block.type === 'text') {
+    const col = document.createElement('div'); col.className = 'textcol';
+    const ta = document.createElement('textarea');
+    ta.placeholder = 'Paragraph text';
+    ta.value = block.text;
+    const links = document.createElement('div'); links.className = 'links';
+    const fit = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
+    ta.addEventListener('input', () => { block.text = ta.value; fit(); refreshCount(); showLinks(links, ta.value); });
+    ta.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); addLink(ta); }
+    });
+    ta._fit = fit;
+    showLinks(links, ta.value);
+    col.append(ta, links);
+    main.appendChild(col);
+
+    const link = document.createElement('button');
+    link.className = 'x link'; link.textContent = 'link';
+    link.title = 'Link the selected words (Ctrl/⌘ K)';
+    // keep the textarea's selection when the button is pressed
+    link.addEventListener('mousedown', e => e.preventDefault());
+    link.addEventListener('click', () => addLink(ta));
+    acts.appendChild(link);
+
+    const split = document.createElement('button');
+    split.className = 'x split'; split.textContent = 'split';
+    split.title = 'Split into one paragraph per line';
+    split.addEventListener('click', () => {
+      const parts = block.text.split('\n').map(s => s.trim()).filter(Boolean);
+      if (parts.length < 2) { toast('Nothing to split — put each paragraph on its own line first'); return; }
+      const newBlocks = parts.map(text => ({ type:'text', text }));
+      const i = p.blocks.indexOf(block);
+      p.blocks.splice(i, 1, ...newBlocks);
+      const frag = document.createDocumentFragment();
+      newBlocks.forEach(nb => frag.appendChild(renderBlock(ctx, nb)));
+      row.replaceWith(frag);
+      fitTextareas(list);
+      refreshCount();
+      toast('Split into ' + parts.length + ' paragraphs', 'ok');
+    });
+    acts.appendChild(split);
+  } else {
+    const thumb = document.createElement('span'); thumb.className = 'thumb';
+    const setThumb = () => {
+      thumb.style.backgroundImage = block.src.trim() ? 'url("' + block.src.trim().replace(/"/g, '%22') + '")' : '';
+    };
+    setThumb();
+
+    const src = document.createElement('input'); src.type='text'; src.className='src';
+    src.placeholder = 'img/example.jpg'; src.value = block.src;
+    src.addEventListener('input', () => { block.src = src.value; setThumb(); refreshCount(); });
+
+    const cap = document.createElement('input'); cap.type='text'; cap.className='cap';
+    cap.placeholder = 'caption (optional)'; cap.value = block.caption;
+    cap.addEventListener('input', () => { block.caption = cap.value; });
+
+    main.append(thumb, src, cap);
+  }
+
+  const up = document.createElement('button');
+  up.className = 'x mv'; up.textContent = '↑'; up.title = 'Move up';
+  up.addEventListener('click', () => {
+    const prev = row.previousElementSibling;
+    if (prev) { list.insertBefore(row, prev); syncOrder(ctx); }
+  });
+  const down = document.createElement('button');
+  down.className = 'x mv'; down.textContent = '↓'; down.title = 'Move down';
+  down.addEventListener('click', () => {
+    const next = row.nextElementSibling;
+    if (next) { list.insertBefore(next, row); syncOrder(ctx); }
+  });
+  const x = document.createElement('button');
+  x.className = 'x'; x.innerHTML = '×'; x.title = 'Remove';
+  x.addEventListener('click', () => {
+    p.blocks = p.blocks.filter(b => b !== block);
+    row.remove();
+    refreshCount();
+  });
+  acts.append(up, down, x);
+
+  row.append(drag, kind, main, acts);
+
+  // drag reorder
+  row.addEventListener('dragstart', e => {
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', ''); } catch (_) {}
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    row.draggable = false;
+    syncOrder(ctx);
+  });
+  row.addEventListener('dragover', e => {
+    const dragging = list.querySelector(':scope > .dragging');
+    if (!dragging) return;
+    e.preventDefault();
+    if (dragging === row) return;
+    const rect = row.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    list.insertBefore(dragging, after ? row.nextSibling : row);
+  });
+
+  return row;
+}
+
+function renderRelatedList(p) {
+  const box = document.createElement('div');
+  box.className = 'relatedlist';
+
+  // other projects, in current model order
+  const others = model.filter(m => m !== p);
+  if (!others.length) {
+    const none = document.createElement('span');
+    none.className = 'rl-none';
+    none.textContent = 'No other projects to link yet.';
+    box.appendChild(none);
+    return box;
+  }
+
+  // drop any related keys that no longer point at an existing project
+  p.related = (p.related || []).filter(k => model.some(m => m.key === k && m !== p));
+
+  others.forEach(o => {
+    const lab = document.createElement('label');
+    const on = p.related.includes(o.key);
+    if (on) lab.classList.add('on');
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = on;
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        if (!p.related.includes(o.key)) p.related.push(o.key);
+        lab.classList.add('on');
+      } else {
+        p.related = p.related.filter(k => k !== o.key);
+        lab.classList.remove('on');
+      }
+    });
+
+    const ttl = document.createElement('span');
+    ttl.className = 'rl-ttl';
+    ttl.textContent = o.title || '(untitled)';
+
+    const key = document.createElement('span');
+    key.className = 'rl-key';
+    key.textContent = o.key;
+
+    lab.append(cb, ttl, key);
+    box.appendChild(lab);
+  });
+
+  return box;
+}
+
+function field(labelText, hint, buildControl) {
+  const f = document.createElement('div'); f.className='field';
+  const l = document.createElement('label');
+  l.innerHTML = esc(labelText) + (hint ? ' <span class="hint">'+esc(hint)+'</span>' : '');
+  f.appendChild(l);
+  f.appendChild(buildControl());
+  return f;
+}
+
+function mkBtn(text, cls, fn) {
+  const b = document.createElement('button');
+  b.className = 'btn ' + (cls||'');
+  b.textContent = text;
+  b.addEventListener('click', fn);
+  return b;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// ---- Links inside text ----
+// Same rules as index.html: <a href="…">words</a> becomes a link on the site,
+// everything else stays plain text. Keep these two in step with index.html.
+const TEXT_LINK_RE = /<a\s+(?:[^>]*?\s)?(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|“([^”]*)”|([^\s>]+))[^>]*>([\s\S]*?)<\/a\s*>/gi;
+
+function linkHref(raw) {
+  const url = String(raw || '').trim();
+  if (!url) return '';
+  if (/^www\./i.test(url)) return 'https://' + url;
+  if (/^[^\s@\/:]+@[^\s@\/]+\.[^\s@\/]+$/.test(url)) return 'mailto:' + url;
+  if (/^[a-z][a-z0-9+.\-]*:/i.test(url) && !/^(https?|mailto|tel):/i.test(url)) return '';
+  return url;
+}
+
+// What the link prompt accepts: adds https:// to something like "studiofolder.it/about"
+function typedUrl(raw) {
+  let url = String(raw || '').trim();
+  if (!url || url === 'https://') return '';
+  if (!/^([a-z][a-z0-9+.\-]*:|#|\/|\.)/i.test(url) && !url.includes('@')
+      && /^[^\/\s]+\.[a-z]{2,}(\/|$|\?|#)/i.test(url)) url = 'https://' + url;
+  return linkHref(url);
+}
+
+// Wrap the selected words in <a href="…">…</a>. With nothing selected,
+// inserts placeholder words and selects them so they can be typed over.
+function addLink(ta) {
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const sel = ta.value.slice(s, e);
+  const looksLikeUrl = /^(https?:\/\/|www\.)\S+$/i.test(sel.trim());
+  const raw = prompt('Link address — a web address, an email, or #project-key to open another project',
+                     looksLikeUrl ? sel.trim() : 'https://');
+  if (raw === null) { ta.focus(); ta.setSelectionRange(s, e); return; }
+  const url = typedUrl(raw);
+  if (!url) { toast('Enter a web address, an email or #project-key to add a link', 'err'); ta.focus(); ta.setSelectionRange(s, e); return; }
+
+  // keep spaces around the selection outside the link
+  const lead  = sel.match(/^\s*/)[0];
+  const trail = sel.trim() ? sel.match(/\s*$/)[0] : '';
+  const words = sel.trim() || 'link text';
+  const open  = '<a href="' + url.replace(/"/g, '%22') + '">';
+  const snippet = lead + open + words + '</a>' + trail;
+
+  ta.focus();
+  ta.setSelectionRange(s, e);
+  // execCommand keeps the change in the textarea's undo history; fall back if unsupported
+  if (!document.execCommand || !document.execCommand('insertText', false, snippet)) {
+    ta.setRangeText(snippet, s, e, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  if (!sel.trim()) {
+    const at = s + lead.length + open.length;
+    ta.setSelectionRange(at, at + words.length);
+  }
+}
+
+// Under each text block: one line per link found, so it's clear what the site will show.
+function showLinks(el, text) {
+  el.innerHTML = '';
+  const add = (html, cls) => { const d = document.createElement('div'); if (cls) d.className = cls; d.innerHTML = html; el.appendChild(d); };
+  let m, found = 0;
+  TEXT_LINK_RE.lastIndex = 0;
+  while ((m = TEXT_LINK_RE.exec(text))) {
+    found++;
+    const raw = [m[1], m[2], m[3], m[4]].find(v => v !== undefined);
+    const href = linkHref(raw);
+    const words = m[5].trim() || href;
+    if (href) add('“' + esc(words) + '” links to <span class="ok-url">' + esc(href) + '</span>');
+    else if (!String(raw || '').trim()) add('“' + esc(words) + '” has no link address — add one between the quotes after href=', 'bad');
+    else add('“' + esc(words) + '” won’t link: “' + esc(raw) + '” isn’t a web address, email or #project-key', 'bad');
+  }
+  const opened = (text.match(/<a[\s>]/gi) || []).length;
+  if (opened > found) {
+    add('A link isn’t complete and will show as plain text — it needs the form &lt;a href="https://…"&gt;words&lt;/a&gt;', 'bad');
+  }
+}
+
+// ---- Serialize back to projects-data.js ----
+function jsStr(s) {
+  // single-quoted JS string literal, preserving \n as literal backslash-n
+  return "'" + String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '') + "'";
+}
+
+function serialize() {
+  const header =
+`// Shared project data. Used by both index.html (carousel) and project.html (detail page).
+// \`title\`   – shown large/bold on the project page
+// \`meta\`    – small grey-ish lines under the title (place, year, collaborators…)
+// \`content\` – what the side panel shows, in order, top to bottom. Each item is:
+//             { text: 'a paragraph' }                        – a text paragraph
+//             'img/x.jpg'                                    – an image
+//             { src: 'img/x.jpg', caption: 'small caption' } – an image with a caption
+//             Text at the very top sits next to the meta; the rest stacks below.
+//             Links inside text: <a href="https://…">words</a> (the link button in project-editor.html).
+// \`body\` and \`images\` are generated from \`content\` for pages that still read them.
+//   Edit \`content\` (or use project-editor.html) — not these two.
+window.PROJECTS = {
+`;
+
+  const imgItem = (b) => (b.caption && b.caption.trim())
+    ? '{ src: ' + jsStr(b.src) + ', caption: ' + jsStr(b.caption) + ' }'
+    : jsStr(b.src);
+
+  const blocks = model.map(p => {
+    const metaArr = '[' + p.meta.map(jsStr).join(', ') + ']';
+
+    const items = p.blocks.filter(b => b.type === 'text' ? b.text.trim() : b.src.trim());
+    const contentBlock = items.length
+      ? '[\n' + items.map(b => '      ' + (b.type === 'text'
+          ? '{ text: ' + jsStr(b.text.trim()) + ' }'
+          : imgItem(b))).join(',\n') + ',\n    ]'
+      : '[]';
+
+    const texts = items.filter(b => b.type === 'text').map(b => b.text.trim());
+    const imgs  = items.filter(b => b.type === 'image');
+    const imagesBlock = imgs.length
+      ? '[\n' + imgs.map(b => '      ' + imgItem(b)).join(',\n') + ',\n    ]'
+      : '[]';
+
+    // only emit related keys that still point at an existing project
+    const relKeys = (p.related || []).filter(k => model.some(m => m.key === k) && k !== p.key);
+    const relatedLine = relKeys.length
+      ? '\n    related: [' + relKeys.map(jsStr).join(', ') + '],'
+      : '';
+
+    return (
+`  ${jsStr(p.key)}: {
+    title: ${jsStr(p.title)},
+    meta: ${metaArr},
+    content: ${contentBlock},${relatedLine}
+    // generated from content:
+    body: ${jsStr(texts.join('\n\n'))},
+    images: ${imagesBlock},
+  },`
+    );
+  });
+
+  return header + '\n' + blocks.join('\n\n') + '\n\n};\n';
+}
+
+document.getElementById('download').addEventListener('click', () => {
+  // flush any focused field
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  const out = serialize();
+  const blob = new Blob([out], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'projects-data.js';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Downloaded projects-data.js', 'ok');
+});
+
+function updateSourceBadge() {
+  const b = document.getElementById('srcBadge');
+  if (dataSource === 'file') { b.textContent = 'loaded from file'; b.className = 'src file'; }
+  else if (dataSource === 'opened') { b.textContent = 'opened file'; b.className = 'src file'; }
+  else { b.textContent = 'built-in snapshot'; b.className = 'src embedded'; }
+}
+
+// Parse a projects-data.js file's text and extract its PROJECTS object.
+// The file assigns window.PROJECTS = {...}; we run it with a stubbed window
+// in a Function scope (no access to this page's real globals) and read it back.
+function parseProjectsJS(text) {
+  const sandboxWin = {};
+  // Provide both `window` and a bare `PROJECTS` capture path.
+  const fn = new Function('window', '"use strict";\n' + text + '\n;return window.PROJECTS;');
+  const result = fn(sandboxWin);
+  if (!result || typeof result !== 'object') {
+    throw new Error('No window.PROJECTS object found in that file.');
+  }
+  return result;
+}
+
+document.getElementById('openFile').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const projects = parseProjectsJS(String(reader.result));
+      const next = toModel(projects);
+      model = next;
+      dataSource = 'opened';
+      Object.keys(openState).forEach(k => delete openState[k]);
+      updateSourceBadge();
+      render();
+      toast('Loaded ' + file.name + ' — ' + model.length + ' projects', 'ok');
+    } catch (err) {
+      toast('Could not read that file: ' + err.message, 'err');
+    }
+  };
+  reader.onerror = () => toast('Failed to read file', 'err');
+  reader.readAsText(file);
+  e.target.value = ''; // allow re-opening the same filename later
+});
+
+document.getElementById('addProject').addEventListener('click', () => {
+  let base = 'new-project', k = base, n = 1;
+  while (model.some(m => m.key === k)) k = base + '-' + (++n);
+  const p = { key:k, title:'', meta:[], blocks:[], related:[] };
+  model.unshift(p);
+  openState[k] = true;
+  render();
+  window.scrollTo({ top: 0, behavior:'smooth' });
+});
+
+document.getElementById('expandAll').addEventListener('click', () => {
+  model.forEach(p => openState[p.key] = true); render();
+});
+document.getElementById('collapseAll').addEventListener('click', () => {
+  model.forEach(p => openState[p.key] = false); render();
+});
+
+updateSourceBadge();
+render();
+</script>
+</body>
+</html>

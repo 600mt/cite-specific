@@ -1,616 +1,1455 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Map Notes</title>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-
+  <meta charset="UTF-8">
+  <link rel="icon" href="img/favicon.jpg" type="image/jpg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Matteo Bettini</title>
   <style>
-    /* Typeface and glow shared by the notes and the menu.
-       The menu stays at --text-size; notes scale with zoom (NOTE_SIZE_* in the script). */
-    :root {
-      --text-size: 13px;
-      --text-font: 'Arial Narrow', sans-serif;
-      --text-glow: 0 0 4px #e892a2, 0 0 4px #e892a2, 0 0 3px #e892a2;
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+    body { overflow:hidden; background:#bababa; font-family:'Times New Roman', Times, serif; }
+
+
+    .main-layout { display:flex; width:100vw; height:100vh; height:100dvh; }
+
+    /* the archive link, on its own: the script gives it a random tilt and
+       a random spot around the footer on every load (see ARCHIVE FLOAT) */
+    #archive-float {
+      position:fixed; left:0; top:0;
+      color:#ffffff; font-size:1.25em; line-height:1.2;
+      white-space:nowrap;
+      z-index:101; pointer-events:none;
+      visibility:hidden;   /* shown once the script has placed it */
+    }
+    #archive-float a { color:inherit; text-decoration:underline; pointer-events:all; }
+
+    .scroll-area { flex:1; position:relative; overflow:hidden; }
+
+    .carousel-clip {
+      position:absolute;
+      top: calc(-1 * env(safe-area-inset-top, 0px));
+      bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+      left: 0;
+      right: 0;
+      overflow:hidden; touch-action:pan-y;
+    }
+    .carousel-track {
+      position:absolute;
+      top: env(safe-area-inset-top, 0px);
+      left:0; width:100%; will-change:transform;
+    }
+    .carousel-track img   { width:100%; height:auto; display:block; pointer-events:none; -webkit-user-drag:none; }
+    .carousel-track video { width:100%; height:auto; display:block; pointer-events:none; min-height:0; vertical-align:top; }
+
+    .image-wrapper { position:relative; width:100%; font-size:0; }
+    .image-wrapper.has-project { cursor:pointer; }
+
+    .thumb-bar {
+      width:60px; height:100vh; height:100dvh; flex-shrink:0;
+      position:fixed; right:0; z-index:10;
+      overflow-y:auto; scrollbar-width:none; transition:opacity .2s;
+    }
+    body.panel-open .thumb-bar { opacity:0; pointer-events:none; }
+    .thumb-bar::-webkit-scrollbar { display:none; }
+    .thumb-item { width:100%; cursor:pointer; opacity:.5; transition:opacity .2s; }
+    .thumb-item:hover,.thumb-item.active { opacity:1; }
+    .thumb-item img { width:100%; height:auto; display:block; pointer-events:none; }
+
+    #footer {
+      position:fixed; bottom:0px; left:5px; width:calc(100vw - 80px); 
+      transform:rotate(2deg);
+      color:#ffffff; font-size:1.25em; line-height:1.2;
+      mix-blend-mode:normal; z-index:100; pointer-events:none;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    #footer a { color:inherit; text-decoration:underline; pointer-events:all; }
+
+    #name {
+            letter-spacing: 0.4rem;
+        }
+
+      #name2 {
+            letter-spacing: 0.2rem;
+        }
+
+    #bio {
+      position:fixed; top:5px; left:2px;
+      width:calc(100vw - 80px);
+      color:#ffef3d; line-height:1.2;
+      mix-blend-mode:normal; z-index:100; pointer-events:none;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    *, *::before, *::after { box-sizing: border-box; }
-    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-    #map { width: 100%; height: 100%; background: #f2efe9; }
-
-    /* ── Notes on the map ─────────────────────────────────────── */
-    .note-type {
-      font-family: var(--text-font);
-      line-height: 1.25;              /* = LINE_HEIGHT in the script */
-      color: #000;
-      text-shadow: var(--text-glow);
+    /* side panel — 45vw, white, black text, minimal/brutalist */
+    .side-panel {
+      position:fixed; top:0; right:0;
+      height:100vh; height:100dvh; width:0;
+      overflow:hidden; z-index:200;
+      background:#ffffff;
     }
-    .note-layer {
-      position: absolute; inset: 0;
-      pointer-events: none;
-      -webkit-user-select: none; user-select: none;
-      -webkit-tap-highlight-color: transparent;
+    body.panel-open .side-panel { width:40vw; }
+
+    /* native-scroll column: text then images */
+    .side-clip {
+      position:absolute; inset:0;
+      overflow-y:scroll; overflow-x:hidden;
+      -webkit-overflow-scrolling:touch;
+      opacity:0; transition: opacity 0.2s ease;
+      scrollbar-width:none;
     }
-    /* off-screen copy used to measure each note once */
-    .note-measure {
-      position: fixed; left: -10000px; top: 0;
-      width: 4000px; height: 0;
-      visibility: hidden; pointer-events: none;
+    body.panel-open .side-clip { opacity:1; }
+    .side-clip::-webkit-scrollbar { display:none; }
+
+    /* images: 1% padding on all sides and between them */
+    .side-track { width:100%; padding:1% 1% 0 1%; }
+    .side-track .side-img { margin-bottom:0%; }
+    .side-track .side-img:last-child { margin-bottom:1%; }
+
+    /* text paragraphs: consecutive paragraphs are separated by one blank line */
+    .side-para + .side-para { margin-top:1.25em; }
+    /* links inside project text */
+    .side-para a { color:inherit; text-decoration:underline; text-underline-offset:0.12em; cursor:pointer; }
+    .side-para a:hover { color:#9a9a9a; }
+    /* text placed between images — sits in the same column as the body above */
+    .side-track .side-text {
+      margin:3% 0 4% 50%;
+      padding-right:1%;
+      font-size:0.7em;
+      line-height:1.25;
+      color:#000000;
+    }
+    .side-track .side-text:first-child { margin-top:1%; }
+    .side-track .side-img img {
+      width:100%; height:auto; display:block;
+      pointer-events:none; -webkit-user-drag:none;
+      opacity:0; transition:opacity .3s ease;
+      background:#f0f0f0;   /* light placeholder while decoding */
+    }
+    .side-track .side-img img.loaded { opacity:1; }
+    .side-track .side-img .side-cap {
+      display:block;
+      color:#b5b5b5;
+      font-size:0.6em;
+      line-height:1.2;
+      margin-top:0.3em;
     }
 
-    .note-label {
-      position: absolute; left: 0; top: 0;
-      pointer-events: auto;
-      white-space: normal;
-      overflow-wrap: break-word;
-      text-align: left;
-      transition: opacity 0.2s ease;
+    /* description text — black on white, no borders */
+    .side-desc {
+      width:100%;
+      color:#000000; line-height:1.25;
+      background:transparent;
+      text-align:left;
+      padding:2% 2% 0 2%;
+      letter-spacing:0;
     }
-    .note-label.align-right { text-align: right; }
-    .note-item, .note-more { max-width: 13em; }
-    .note-item.is-long { max-width: 19em; }
-    .note-label.align-right .note-item,
-    .note-label.align-right .note-more { margin-left: auto; }
-    /* space between notes in a list once they show more than a title (= ITEM_GAP_EM) */
-    .note-label.detailed .note-item + .note-item,
-    .note-label.detailed .note-more { margin-top: 0.4em; }
-    .note-long { white-space: pre-line; }
-
-    .note-dot {
-      position: absolute; left: 0; top: 0;
-      border-radius: 50%;
-      background: #000;
-      box-shadow: 0 0 3px #e892a2, 0 0 2px #e892a2;
-      pointer-events: auto;
+    /* title spans the full width across the top */
+    .side-title {
+      width:50%;
+      font-size:0.8em;
+      padding-bottom:10%;
     }
-    .note-dot::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; } /* easier to tap */
-
-    .note-layer.can-zoom .note-item,
-    .note-more,
-    .note-dot { cursor: pointer; }
-
-    .note-layer.dimmed .note-label { opacity: 0.15; }
-    .note-layer.dimmed .note-label.is-hovered { opacity: 1; z-index: 1; }
-
-    /* ── Category menu ────────────────────────────────────────── */
-    .legend {
-      position: absolute;
-      top: calc(12px + env(safe-area-inset-top, 0px));
-      left: 12px;
-      z-index: 1000;
-      font-family: var(--text-font);
-      font-size: var(--text-size);
-      line-height: 1.25;
-      color: #000;
-      text-shadow: var(--text-glow);
+    .side-title .side-subtitle {
+      display:block;
+      color:#b5b5b5;
+      margin-top:0.4em;
     }
-    .legend label {
-      display: flex; align-items: center; gap: 7px;
-      padding: 2px 0;
-      cursor: pointer;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
+    /* meta (left) and body (right) sit side by side, aligned at the same top */
+    .side-cols { display:flex; width:100%; align-items:flex-start; padding-bottom:2%; }
+    .side-cols .side-meta {
+      width:50%;
+      padding-right:2%;
+      color:#b5b5b5;
+      font-family: Arial, sans-serif;
+      font-size:0.7em;
     }
-    .legend input { margin: 0; width: 12px; height: 12px; accent-color: #000; cursor: pointer; }
-    .legend .count { margin-left: 4px; }
+    .side-cols .side-body {
+      width:50%;
+      font-size:0.7em;
+    }
 
-    .maplibregl-ctrl-attrib.maplibregl-compact { min-width: 24px; }
-    .maplibregl-ctrl-attrib-button { display: block !important; }
+    /* related works — rounded grey buttons after the "Related works" label */
+    .side-related {
+      width:100%;
+      padding-top:6px;   /* a few pixels below the meta lines */
+    }
+
+    /* desktop: title (left) + related works (right) share the top row */
+    .side-toprow { display:flex; width:100%; align-items:flex-start; padding-bottom:10%; }
+    .side-toprow .side-title { padding-bottom:0; }   /* gap moves to the row */
+    .side-toprow .side-related-col {
+      width:50%;
+      font-size:0.7em;   /* same scale as .side-meta so pills match the meta size */
+    }
+    .side-toprow .side-related-col .side-related { padding-top:0; }
+    .side-related .side-related-title {
+      color:#b5b5b5;
+      font-family: Arial, sans-serif;
+      font-size:1em;   /* same size as the meta lines (parent .side-meta is 0.7em) */
+      letter-spacing:0.02em;
+      margin-right:0.4em;
+    }
+    .side-related .related-btns {
+      display:inline;   /* buttons flow right after the label text */
+    }
+    .side-related .related-btn {
+      display:inline-block;
+      background:#b5b5b5;
+      color:#ffffff;
+      font-family: Arial, sans-serif;
+      font-size:1em;   /* match the meta / label size */
+      line-height:1.2;
+      padding:0.2em 0.7em;
+      margin:0 0.3em 0.3em 0;
+      border-radius:999px;
+      cursor:pointer;
+      border:none;
+      transition:background .15s;
+      pointer-events:all;
+      vertical-align:middle;
+      white-space:nowrap;
+      text-align:left;
+    }
+    .side-related .related-btn:hover { background:#9a9a9a; }
+
+    /* carousel captions: same look as the side-panel captions (.side-cap),
+       laid over the bottom-left corner of their image so they take no space.
+       To put them at the top of the image instead, swap bottom:4px for top:4px. */
+    .image-wrapper .caption {
+      position:absolute; left:5px; bottom:4px;
+      max-width:calc(100% - 80px);   /* keeps clear of the thumbnail bar */
+      color:#ffffff;
+      font-size:0.8rem;   /* the wrapper is font-size:0, so rem; same 9.6px as .side-cap */
+      line-height:1.2;
+      pointer-events:none;
+      mix-blend-mode:normal;   /* caption is black on light images, white on dark images */
+    }
+
+    
+
+    @media (max-width:768px) {
+      .more-label { display:none; }
+    }
+
+    /* ── MOBILE ── */
+    @media (max-width:768px) {
+      .main-layout {
+        height: 100vh;
+        height: 100dvh;
+        min-height: -webkit-fill-available;
+      }
+      .thumb-bar { display:none; }
+      #footer {
+        top:20px; bottom:auto;   /* mobile: footer sits at the top */
+        width:100vw; font-size:1.0em; line-height:1.2;
+        mix-blend-mode:normal;
+        padding-left: env(safe-area-inset-left, 1px);
+        padding-right: env(safe-area-inset-right, 0px);
+        padding-bottom:0;
+      }
+      #archive-float { font-size:1.0em; }
+      
+      #bio {
+        width:100vw; font-size:.72em; line-height:1.3;
+        bottom: max(2px, env(safe-area-inset-bottom, 2px));
+        transition: opacity .3s;
+        padding-bottom: 0;
+      }
+      body.panel-open #bio { opacity:0; pointer-events:none; }
+      body.panel-open #footer { opacity:1; pointer-events:none; }
+
+      .side-panel {
+        position:fixed; top:0; right:0; height:100vh; height:100dvh;
+        z-index:200; width:0; background:#ffffff;
+      }
+      body.panel-open .side-panel  { width:88vw; }
+
+      .side-desc {
+        position:static; width:100%;
+        padding:1% 1% 0 1%;
+        padding-top:0.3em;   /* small breathing room at the top of the panel */
+        font-size:1em; line-height:1.27;
+        color:#000000;
+      }
+      /* small viewport: title 50% (left) + meta 50% (right) share the top row,
+         then spacing, then body/desc at full width below */
+      .side-head {
+        display:flex; width:100%; align-items:flex-start;
+        padding-bottom:2em;   /* spacing before the full-width desc row */
+      }
+      .side-head .side-title { width:50%; padding-bottom:0; }
+      .side-head .side-meta {
+        width:50%; padding-left:2%;
+        color:#b5b5b5;
+        font-family: Arial, sans-serif;
+        font-size:0.72em;   /* Arial reads larger than Times, so a touch smaller matches the title optically */
+      }
+      .side-cols { flex-direction:column; padding-bottom:0; }
+      .side-cols .side-meta { display:none; }   /* meta now live in .side-head on mobile */
+      .side-cols .side-body { width:100%; font-size:1em; }
+      .side-track .side-text {
+        margin:4% 0 6% 0; padding-right:0;
+        font-size:1em; line-height:1.27;
+      }
+      .side-related { padding-top:6px; }
+      .side-related .side-related-title,
+      .side-related .related-btn { font-size:1em; }   /* same as the mobile meta */
+    }
+
+    /* ── ARCHIVE VIEW (in-page swap) ── */
+    #archive-view {
+      position:fixed; inset:0; z-index:300;
+      background:#ffffff; color:#000;
+      overflow-y:auto; -webkit-overflow-scrolling:touch;
+      display:none;
+      font-family:'Times New Roman', Times, serif;
+      -webkit-user-select:text; user-select:text;
+    }
+    body.archive-open { overflow:hidden; }
+    body.archive-open #archive-view { display:block; }
+
+    #archive-view ::selection { background-color:#ffea00; }
+    #archive-view a { color:inherit; }
+
+    /* one shared footer: in the archive it only turns black and sits above
+       the archive page; the floating link does the same and swaps
+       "Archive" for "← Back" */
+    #archive-back { display:none; }
+    body.archive-open #archive-open { display:none; }
+    body.archive-open #archive-back { display:inline; }
+    body.archive-open #footer { color:#000000; z-index:310; }
+    body.archive-open #archive-float { color:#000000; z-index:311; }
+
+    /* archive: the year (or the type) hangs in the margin, entries run beside it.
+       One size, black only, space is the only separator. */
+    #archive-content {
+      padding-left:25vw;   /* desktop: the archive takes the right 60% of the screen */
+      padding-right:2vw;
+      padding-top:5px;
+      padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); /* last entries can scroll clear of the footer */
+      font-size:1.0em; line-height:1.20;
+      color:#000000;
+    }
+    /* the margin is the same width in both views, so the entries
+       don't jump sideways when switching */
+    .arch-group { display:grid; grid-template-columns:8.5em minmax(0, 1fr); column-gap:1em; }   /* entries fill the rest of the width */
+    .arch-group + .arch-group { margin-top:0.9em; }   /* a blank line between groups */
+    .arch-meta { padding-left:1em; }   /* mobile: everything after the title, indented under it */
+    .arch-entry a { text-underline-offset:0.12em; }
+    .arch-nowrap { white-space:nowrap; }
+    @media (min-width:769px) {
+      /* desktop: two columns, the title on the left, the details on the right.
+         Every entry uses the same split, so the columns line up down the list. */
+      .arch-entry { display:grid; grid-template-columns:2fr 3fr; column-gap:1.5em; }   /* 60% title, 40% details */
+      /* a line that wraps inside a column hangs 1em in, so it reads as a
+         continuation and not as the start of the next entry */
+      .arch-title, .arch-meta { padding-left:1em; text-indent:-1em; }
+    }
+    .by-type .arch-group > span { letter-spacing:0.2rem; }   /* category names, spaced out as before */
+
+    /* year / type switch — desktop: top-left corner, same size as the footer.
+       The view you're on is underlined, the other one is plain text. */
+    #arch-switch {
+      position:fixed; top:5px; left:5px; z-index:305;
+      font-size:1.25em; line-height:1.2; color:#000000;
+    }
+    #arch-switch button {
+      font:inherit; color:inherit; background:none; border:0; padding:0;
+      cursor:pointer; text-decoration:none; text-underline-offset:0.12em;
+    }
+    #arch-switch button[aria-pressed="true"] { text-decoration:underline; cursor:default; }
+
+    @media (max-width:768px) {
+      /* mobile: the footer holds the top, so the switch sits just below it,
+         above the list, and scrolls with it */
+      #arch-switch {
+        position:static;
+        padding:150px 2vw 0;
+        font-size:1em;
+      }
+      #archive-content {
+        padding-left:2vw; padding-right:2vw;
+        padding-top:0.9em;
+        padding-bottom:10vh;
+        font-size:1.00em; line-height:1.2;
+      }
+      .arch-group { grid-template-columns:3.6em minmax(0, 1fr); column-gap:0.5em; }
+      /* type names are too long for the narrow margin: put them above their entries */
+      .by-type .arch-group { grid-template-columns:minmax(0, 1fr); }
+    }
+
+    /* loading: keep carousel invisible until visible images are ready */
+    #carousel-track { opacity:0; }
+    body.ready #carousel-track { opacity:1; }
+
+    #loader {
+      position:fixed; inset:0; z-index:400;
+      background:#000;
+      pointer-events:none;
+    }
+    body.ready #loader { display:none; }
   </style>
 </head>
 <body>
-  <div style="color:#0088ff" id="map"></div> 
-  <nav id="legend" class="legend" aria-label="Show on the map"></nav>
+<div id="loader"></div>
+<div class="main-layout">
 
-  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script src="map-notes.js"></script>
-  <script>
-    // =========================================================================
-    // 🎨  MAP PALETTE: fields, rock, coastline, buildings and borders
-    // =========================================================================
-    const COLORS = {
-      background:      "#ffffff",
-      fields:          "#eef0d5",  // farmland, orchards, vineyards
-      rock:            "#eef0d5",  // bare rock and scree
-      water:           "#ffffff",
-      building:        "#d9d0c9",
-      buildingOutline: "#d9d0c9",
-      boundary:        "#e892a2",
-    };
+  <div class="scroll-area" id="scroll-area">
+    <div class="carousel-clip" id="carousel-clip">
+      <div class="carousel-track" id="carousel-track">
+        <div id="image-list">
 
-    const mapStyle = {
-      version: 8,
-      sources: {
-        openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" }
-      },
-      layers: [
-        { id: "background", type: "background", paint: { "background-color": COLORS.background } },
-        { id: "fields", type: "fill", source: "openmaptiles", "source-layer": "landcover", filter: ["==","class","farmland"], paint: { "fill-color": COLORS.fields } },
-        { id: "rock", type: "fill", source: "openmaptiles", "source-layer": "landcover", filter: ["==","class","rock"], paint: { "fill-color": COLORS.rock } },
-        { id: "water", type: "fill", source: "openmaptiles", "source-layer": "water", paint: { "fill-color": COLORS.water } },
-        { id: "building", type: "fill", source: "openmaptiles", "source-layer": "building", minzoom: 14, paint: { "fill-color": COLORS.building, "fill-outline-color": COLORS.buildingOutline } },
-        {
-  id: "funicular-lines",
-  type: "line",
-  source: "openmaptiles", // Replace with your exact source ID if different
-  "source-layer": "transportation",
-  filter: ["==", ["get", "subclass"], "funicular"],
-  paint: {
-    "line-color": COLORS.funicular || "#ff5500", // Fallback hex color if COLORS.funicular is undefined
-    "line-width": 2
+          <div class="image-wrapper" data-device="desktop" data-project="shadow-circuits">
+            <img src="img/mam_1_hor.jpg">
+            <span class="caption">"I was sure I would find it here". MaMA, Rotterdam (2026) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="viewing-conditions">
+            <img src="img/viewingconditions_15.jpg">
+            <span class="caption">"Viewing Conditions". Het Nieuwe Instituut, Rotterdam (2026) </span>
+          </div>
+                    <div class="image-wrapper" data-device="desktop" data-project="a-place">
+            <img src="img/aplace_2.jpg">
+            <span class="caption">"A Place Without a Name". Metamorphic Zone (2023-now) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="gas-route">
+            <img src="img/TheGasRoute_6.png">
+            <span class="caption">"Il signore che viene da lontano". (2023) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="22x11x11">
+            <img src="img/22x11x11_5_rotate.jpg">
+            <span class="caption">"22.86x11.43x11.43". Palazzo Bronzo, Genoa (2025) </span>
+          </div>
+                    <div class="image-wrapper" data-device="desktop" data-project="where-to">
+            <img src="img/dem2_1.jpg">
+            <span class="caption">"Fragments of Democracy II". Circolo del Design, Turin (2025) </span>
+          </div>
+                      <div class="image-wrapper" data-device="desktop" data-project="agreat">
+            <img src="img/gasroute.png">
+            <span class="caption">"The Gas Route" (2023) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="ppv">
+            <img src="img/ppv_5.jpg">
+            <span class="caption">"Perfect-Perfect-View". Oud House, Rotterdam (2025)  </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="agreat">
+            <img src="img/Agreat_2.jpg">
+            <span class="caption">"A great place for a ride" (2023) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="algo">
+            <img src="img/AlgorithmicMemories_4.png">
+            <span class="caption">"Algorithmic Memories" (2021) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="fragments-democracy">
+            <img src="img/FragmentsofDemocracy_1_rotate.jpg">
+            <span class="caption">"Fragments of Democracy I". Bundeskunsthalle, Bonn (2024) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="ilsignore">
+            <img src="img/ilsignore_7.jpg">
+            <span class="caption">"The Gas Route" (2023) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop">
+            <img src="img/Anti-NavigationTools_1.png">
+            
+          </div>
+
+<!--mobile-->
+
+
+
+
+<div class="image-wrapper" data-device="mobile" data-project="shadow-circuits">
+            <img src="img/mam_1-2.jpg" loading="lazy">
+            <span class="caption">"I was sure I would find it here". MaMA Rotterdam (2026) </span>
+          </div>
+                    <div class="image-wrapper" data-device="mobile" data-project="a-place">
+            <img src="img/gasroute-1.png" loading="lazy">
+            <span class="caption">"The Gas Route" (2023)</span>
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="viewing-conditions">
+            <img src="img/viewingconditions_12.jpg" loading="lazy">
+            <span class="caption">"Viewing Conditions". Het Nieuwe Instituut, Rotterdam (2026) </span>
+          </div>
+                    <div class="image-wrapper" data-device="mobile" data-project="ppv">
+            <img src="img/ppv_4.jpg" loading="lazy">
+            <span class="caption">"Perfect-Perfect-View". Oud House, Rotterdam (2025)  </span>
+                    </div>
+
+                    <div class="image-wrapper" data-device="mobile" data-project="algo">
+            <img src="img/AlgorithmicMemories_4 copy.png" loading="lazy">
+            <span class="caption">"Algorithmic Memories". (2021) </span>
+          </div>
+
+          <div class="image-wrapper" data-device="mobile" data-project="22x11x11">
+            <img src="img/22x11x11_6.jpg" loading="lazy">
+            <span class="caption">"22.86x11.43x11.43". Palazzo Bronzo, Genoa (2025) </span>
+          </div>
+                    
+
+
+          <div class="image-wrapper" data-device="mobile" data-project="">
+            <img src="img/Scan 3 copy.jpeg" loading="lazy">
+            <span class="caption"> </span>
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="agreat">
+            <img src="img/Agreat_4.jpg" loading="lazy">
+            <span class="caption">A great place for a ride (2023) </span>
+          </div>
+
+          <div class="image-wrapper" data-device="mobile" data-project="fragments-democracy">
+            <img src="img/FragmentsofDemocracy_1.jpg" loading="lazy">
+            <span class="caption">Fragments of Democracy I (2024) </span>
+          </div>
+          <!-- <div class="image-wrapper" data-project="gas-route">
+            <img src="img/frontiere_7.jpg" loading="lazy">
+            <span class="caption">The Gas Route (2023) </span>
+          </div> -->
+
+
+
+        
+          <!-- <div class="image-wrapper" data-device="mobile" data-project="shadow-circuits">
+            <img src="img/mam_5.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="viewing-conditions">
+            <img src="img/viewingconditions_2.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="22x11x11">
+            <img src="img/22x11x11_6.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="ilsignore">
+            <img src="img/ilsignore_8.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="fragments-democracy">
+            <img src="img/FragmentsofDemocracy_1.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="agreat">
+            <img src="img/Agreat_4.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="where-to">
+            <img src="img/dem2_2.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile">
+            <img src="img/IMG_8522.jpg" loading="lazy">
+          </div> -->
+
+        </div>
+      </div>
+    </div>
+    <!-- <p id="archive"> <a href="archive/"> Archive </a> </p> -->
+    
+  </div>
+  <!-- <div>
+    <img src="img/graph2.png" style="position:fixed; top:0; right:0; width:80%; height:30%; z-index:1; pointer-events:none; mix-blend-mode:screen;">
+  </div> -->
+
+  <div class="side-panel" id="side-panel">
+    <div class="side-clip" id="side-clip">
+      <div class="side-desc" id="side-desc"></div>
+      <div class="side-track" id="side-track"></div>
+      
+    </div>
+  </div>
+
+</div>
+<div class="thumb-bar" id="thumb-bar"></div>
+
+<!-- the one footer, shared by the main page and the archive -->
+<p id="footer">
+  <span id="name">Matt</span>eo  <span id="name2">  Bettini</span><br>
+  Information design and art practice<br>
+  Rotterdam (NL)<br>
+  <a href="mailto:mte.bettini@gmail.com">mte.bettini@gmail.com</a><br>
+  <!-- <a href="https://www.instagram.com/600mt/">Instagram</a><br> -->
+  <!-- <img src="img/thunder-2.png" style="position:revert; bottom:0; left:0; width:100%; height:auto; z-index:1; pointer-events:none; mix-blend-mode:screen;"> -->
+</p>
+
+<!-- the archive link, separate from the footer: a random tilt and a random
+     spot around it on every load (see ARCHIVE FLOAT at the end of the script) -->
+<p id="archive-float"><a href="#archive" id="archive-open">Archive</a><a href="#" id="archive-back">← Back</a></p>
+
+<div id="archive-view">
+  <p id="arch-switch"><button type="button" data-mode="year" aria-pressed="false">Year</button> / <button type="button" data-mode="type" aria-pressed="true">Type</button></p>
+  <div id="archive-content" class="by-type"></div>
+</div>
+
+<script src="projects-data.js"></script>
+<script>
+const PROJECTS = window.PROJECTS;
+
+const carouselClip  = document.getElementById('carousel-clip');
+const carouselTrack = document.getElementById('carousel-track');
+const imageList     = document.getElementById('image-list');
+const sidePanel     = document.getElementById('side-panel');
+const sideClip      = document.getElementById('side-clip');
+const sideTrack     = document.getElementById('side-track');
+const sideDesc      = document.getElementById('side-desc');
+const thumbBar      = document.getElementById('thumb-bar');
+
+const isMobile = window.innerWidth <= 768;
+
+/* ── image helpers ───────────────────────────────────────────
+   Normalise an images entry to { src, caption }, and keep a
+   small in-memory cache so a project's images are only ever
+   fetched once. Prefetching on hover/touch means they are
+   usually already in the browser cache by the time the panel
+   opens — so it feels instant. */
+function imgEntry(item) {
+  if (typeof item === 'string') return { src: item, caption: '' };
+  return { src: item.src || '', caption: item.caption || '' };
+}
+
+/* Ordered side-panel content for a project, as a list of
+   { type:'text', text } and { type:'image', src, caption } blocks.
+   Uses `content` when the project has one (set in the project editor);
+   otherwise falls back to body paragraphs followed by images. */
+function splitParas(body) {
+  return String(body || '').replace(/\r/g, '')
+    .split(/\n\s*\n/)
+    .map(par => par.split('\n').map(l => l.trim()).join('\n').trim())
+    .filter(Boolean);
+}
+
+function projectBlocks(p) {
+  if (Array.isArray(p.content)) {
+    return p.content.map(item => {
+      if (typeof item === 'string') return item ? { type:'image', src:item, caption:'' } : null;
+      if (item && typeof item.text === 'string') return item.text.trim() ? { type:'text', text:item.text.trim() } : null;
+      if (item && item.src) return { type:'image', src:item.src, caption:item.caption || '' };
+      return null;
+    }).filter(Boolean);
   }
-},
+  const blocks = splitParas(p.body).map(text => ({ type:'text', text }));
+  (p.images || []).forEach(item => {
+    const e = imgEntry(item);
+    if (e.src) blocks.push({ type:'image', src:e.src, caption:e.caption });
+  });
+  return blocks;
+}
 
-        { id: "boundary", type: "line", source: "openmaptiles", "source-layer": "boundary", filter: ["==","admin_level",2], paint: { "line-color": COLORS.boundary, "line-width": 1.2, "line-dasharray": [4,2] } }
-      ]
+function projectImages(p) {
+  return projectBlocks(p).filter(b => b.type === 'image');
+}
+
+/* Links inside project text. Paragraphs stay plain text, except for links
+   written as <a href="https://…">words</a> (the project editor's "link"
+   button writes them). Everything else is still escaped.
+   - `src=` is accepted as a slip for `href=`
+   - www.… gets https://, a bare email gets mailto:
+   - #project-key opens that project in the panel
+   - web addresses open in a new tab */
+const TEXT_LINK_RE = /<a\s+(?:[^>]*?\s)?(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|“([^”]*)”|([^\s>]+))[^>]*>([\s\S]*?)<\/a\s*>/gi;
+
+function linkHref(raw) {
+  const url = String(raw || '').trim();
+  if (!url) return '';
+  if (/^www\./i.test(url)) return 'https://' + url;
+  if (/^[^\s@\/:]+@[^\s@\/]+\.[^\s@\/]+$/.test(url)) return 'mailto:' + url;
+  // only web, mail and phone schemes (no javascript: etc.)
+  if (/^[a-z][a-z0-9+.\-]*:/i.test(url) && !/^(https?|mailto|tel):/i.test(url)) return '';
+  return url;
+}
+
+function textHtml(text) {
+  let out = '', last = 0, m;
+  TEXT_LINK_RE.lastIndex = 0;
+  while ((m = TEXT_LINK_RE.exec(text))) {
+    out += escHtml(text.slice(last, m.index));
+    last = TEXT_LINK_RE.lastIndex;
+    const href  = linkHref([m[1], m[2], m[3], m[4]].find(v => v !== undefined));
+    const label = escHtml(m[5]) || escHtml(href);
+    if (!href) { out += label; continue; }   // no usable address: show the words only
+    const external = /^(https?:)?\/\//i.test(href);
+    out += '<a href="' + escHtml(href).replace(/"/g, '&quot;') + '"'
+         + (external ? ' target="_blank" rel="noopener"' : '') + '>' + label + '</a>';
+  }
+  return out + escHtml(text.slice(last));
+}
+
+function paraHtml(text) {
+  return '<div class="side-para">' + textHtml(text).replace(/\n/g, '<br>') + '</div>';
+}
+
+const _prefetched = new Set();   // project ids already kicked off
+const _imgCache   = new Map();   // src -> Image (keeps it alive/decoded)
+
+function prefetchImg(src) {
+  if (!src || _imgCache.has(src)) return _imgCache.get(src);
+  const i = new Image();
+  i.decoding = 'async';
+  i.src = src;
+  _imgCache.set(src, i);
+  return i;
+}
+
+function prefetchProject(id) {
+  if (!id || _prefetched.has(id)) return;
+  const p = PROJECTS[id];
+  if (!p) return;
+  _prefetched.add(id);
+  projectImages(p).forEach(b => prefetchImg(b.src));
+}
+
+function makeCarousel(track, getOneH, speed) {
+  let pos    = 0;
+  let lastTs = 0;
+  let acc    = 0;
+
+  let t0y = 0, tPos0 = 0, tActive = false;
+
+  function wrap(p) {
+    const h = getOneH();
+    if (h <= 0) return Math.max(0, p);
+    return ((p % h) + h) % h;
+  }
+
+  function commit(p) {
+    pos = wrap(p);
+    track.style.transform = `translateY(-${pos}px)`;
+  }
+
+  function getPos()  { return pos; }
+  function setPos(p) { commit(p); }
+
+  function addWheel(delta) {
+    commit(pos + delta * 1);
+  }
+
+  function touchStart(e) {
+    tActive = true;
+    t0y     = e.touches[0].clientY;
+    tPos0   = pos;
+  }
+
+  function touchMove(e) {
+    if (!tActive) return;
+    commit(tPos0 + (t0y - e.touches[0].clientY));
+  }
+
+  function touchEnd(e) {
+    tActive = false;
+    return Math.abs(t0y - e.changedTouches[0].clientY);
+  }
+
+  function step(ts) {
+    if (!lastTs) { lastTs = ts; return; }
+    const dt = Math.min(ts - lastTs, 32);
+    lastTs = ts;
+    if (!tActive) {
+      acc += speed * dt / 1000;
+      if (acc >= 1) {
+        const px = Math.floor(acc);
+        acc -= px;
+        commit(pos + px);
+      }
+    }
+  }
+
+  return { step, touchStart, touchMove, touchEnd, setPos, getPos, addWheel };
+}
+
+let mainOneH = 0;
+let panelOpen = false;
+let currentProject = null;
+
+const mainC = makeCarousel(carouselTrack, () => mainOneH, 30);
+
+let visibleWrappers = [], wrapperOffsets = [];
+function buildThumbs() {
+  if (isMobile) return;
+  thumbBar.innerHTML = ''; visibleWrappers = [];
+  document.querySelectorAll('#image-list .image-wrapper').forEach(w => {
+    if (w.style.display === 'none') return;
+    visibleWrappers.push(w);
+    const media = w.querySelector('img') || w.querySelector('video');
+    if (!media) return;
+    const ti = document.createElement('div'); ti.className = 'thumb-item';
+    ti.dataset.index = visibleWrappers.length - 1;
+    const ti2 = document.createElement('img');
+    ti2.src = media.tagName === 'VIDEO' ? (media.poster||'') : media.src;
+    ti.appendChild(ti2); thumbBar.appendChild(ti);
+    ti.addEventListener('click', () => mainC.setPos(wrapperOffsets[+ti.dataset.index] || 0));
+  });
+}
+
+function calcOffsets() { wrapperOffsets = visibleWrappers.map(w => w.offsetTop); }
+
+function updateThumb() {
+  if (isMobile || !mainOneH) return;
+  const pos = mainC.getPos() % mainOneH;
+  const vc = pos + window.innerHeight / 3;
+  let ai = 0;
+  for (let i = 0; i < wrapperOffsets.length; i++) { if (wrapperOffsets[i] <= vc) ai = i; else break; }
+  thumbBar.querySelectorAll('.thumb-item').forEach((t,i) => t.classList.toggle('active', i===ai));
+}
+
+function nl2br(s) {
+  return (s||'').trim().replace(/\n/g,'<br>');
+}
+
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function openPanel(projectId) {
+  const p = PROJECTS[projectId];
+  if (!p) return;
+
+  // reset scroll column
+  sideTrack.innerHTML = '';
+  sideClip.scrollTop = 0;
+
+  const titleHtml = '<div class="side-title">'
+      + (p.title ? escHtml(p.title).replace(/\n/g, '<br>') : '')
+      + (p.subtitle ? '<span class="side-subtitle">' + escHtml(p.subtitle) + '</span>' : '')
+      + '</div>';
+
+  let metaHtml = '';
+  (p.meta || []).forEach(line => { metaHtml += escHtml(line) + '<br>'; });
+  // text blocks at the start of the content sit next to the meta, as before;
+  // everything after that is stacked below in the order set in the editor.
+  const blocks = projectBlocks(p);
+  let lead = 0;
+  while (lead < blocks.length && blocks[lead].type === 'text') lead++;
+  const bodyHtml = blocks.slice(0, lead).map(b => paraHtml(b.text)).join('');
+
+  // related works — rounded grey buttons, one per valid related project key.
+  let relatedHtml = '';
+  const relKeys = (p.related || []).filter(k => k && PROJECTS[k] && k !== projectId);
+  if (relKeys.length) {
+    // shorten a long title to its first 3 words + "…" for the pill label
+    const shortLabel = (t) => {
+      const words = t.trim().split(/\s+/);
+      return words.length > 3 ? words.slice(0, 3).join(' ') + '…' : t.trim();
     };
-
-    // Opening view: Europe at country level (Atlantic coast of Portugal → Romania, Sicily → Denmark).
-    // fitBounds adapts the zoom to the screen, so phones get the whole frame too.
-    const EUROPE_BOUNDS = [[-12, 36], [30, 58]];
-    const map = new maplibregl.Map({
-      container: 'map', style: mapStyle,
-      bounds: EUROPE_BOUNDS, fitBoundsOptions: { padding: 20 },
-      attributionControl: false
+    let btns = '';
+    relKeys.forEach(k => {
+      const full = (PROJECTS[k].title || k).replace(/\n/g, ' ').trim();
+      btns += '<span class="related-btn" data-related="' + escHtml(k) + '"'
+            + ' title="' + escHtml(full) + '">'
+            + escHtml(shortLabel(full)) + '</span>';
     });
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+    relatedHtml = '<div class="side-related">'
+        + '<span class="side-related-title">Related works</span>'
+        + '<div class="related-btns">' + btns + '</div>'
+        + '</div>';
+  }
 
-    // =========================================================================
-    // 🔠  NOTES: SIZE, DETAIL AND SPACING
-    //     Text grows a little as you zoom in. How much a note shows depends on
-    //     the zoom AND on the room around it: if the longer text would run off
-    //     the screen or cover another note, it shows less. Notes that sit close
-    //     together become one list; anything that still has no room waits as a
-    //     point until you zoom in (click a point, a title or "+ N more" to zoom).
-    // =========================================================================
-    const NOTE_SIZE_FAR   = 15;      // text size (px) with the whole of Europe in view
-    const NOTE_SIZE_NEAR  = 19;      // text size (px) at street level
-    const ZOOM_FAR        = 4;
-    const ZOOM_NEAR       = 14;
-    const SIZE_PER_WIDTH  = 1 / 24;  // on narrow screens, text size ≤ screen width × this
+  // mobile: title (left) + meta (right) share a top row; body sits full width below.
+  // desktop: title spans the top, meta (left) + body (right) sit beneath.
+  let dh = '';
+  if (isMobile) {
+    dh += '<div class="side-head">';
+    dh += titleHtml;
+    dh += '<div class="side-meta">' + metaHtml + relatedHtml + '</div>';
+    dh += '</div>';
+    dh += '<div class="side-cols">';
+    dh += '<div class="side-body">' + bodyHtml + '</div>';
+    dh += '</div>';
+  } else {
+    // desktop: title (left) + related works (right) share the top row,
+    // top-aligned; meta (left) + body (right) sit beneath.
+    dh += '<div class="side-toprow">';
+    dh += titleHtml;
+    dh += '<div class="side-related-col">' + relatedHtml + '</div>';
+    dh += '</div>';
+    dh += '<div class="side-cols">';
+    dh += '<div class="side-meta">' + metaHtml + '</div>';
+    dh += '<div class="side-body">' + bodyHtml + '</div>';
+    dh += '</div>';
+  }
 
-    const SHORT_MIN_ZOOM  = 5;       // from here a note may show its short line (`text`)
-    const LONG_MIN_ZOOM   = 14;      // from here it may show the longer description (`long`)
+  sideDesc.innerHTML = dh;
 
-    const GROUP_RADIUS_EM = 3;       // notes closer than this (× text size) are listed together
-    const GROUP_MAX_LINES = 6;       // longest list before "+ N more" (no limit from LONG_MIN_ZOOM)
-    const EDGE_PX         = 10;      // space kept free along the screen edges
-    const GAP_PX          = 4;       // space kept between two notes
-    const DOT_PX          = 5;       // the point marking where a note is (0 = no points)
-    const DOT_GAP_EM      = 0.45;    // space between the point and its text
-
-    const moreText = n => '+ ' + n + ' more';
-    const allText  = n => n + ' notes';
-
-    const LINE_HEIGHT = 1.25;        // = line-height of .note-type
-    const ITEM_GAP_EM = 0.4;         // = margin between notes in a detailed list
-
-    // =========================================================================
-    // 🗂  CATEGORIES (from map-notes.js)
-    // =========================================================================
-    const categories = new Map();
-    (window.MAP_CATEGORIES || [{ id: 'works', label: 'Works' }])
-      .forEach(c => categories.set(c.id, { ...c, visible: true }));
-    function categoryOf(n) {
-      const id = n.category || 'works';
-      if (!categories.has(id)) categories.set(id, { id, label: id, visible: true });
-      return categories.get(id);
-    }
-
-    // =========================================================================
-    // 📍  NOTES
-    // =========================================================================
-    const mapEl = document.getElementById('map');
-
-    const layer = document.createElement('div');
-    layer.className = 'note-type note-layer';
-    map.getCanvasContainer().appendChild(layer);   // inside the map, so dragging over a note still pans
-
-    const measurer = document.createElement('div');
-    measurer.className = 'note-type note-measure';
-    measurer.setAttribute('aria-hidden', 'true');
-    document.body.appendChild(measurer);
-
-    const insetProbe = document.createElement('div');   // reads the phone's notch / home-bar insets
-    insetProbe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:' +
-      'env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
-    document.body.appendChild(insetProbe);
-
-    if (!window.MAP_NOTES) console.warn('map-notes.js not found or empty');
-
-    const notes = [];   // { id, order, data, cat, m: sizes per level, dot }
-    (window.MAP_NOTES || []).forEach((data, order) => {
-      if (typeof data.lat !== 'number' || typeof data.lon !== 'number') return;
-      const n = { id: notes.length, order, data, cat: categoryOf(data), m: null, dot: null, dotOn: false };
-      if (DOT_PX) {
-        n.dot = document.createElement('div');
-        n.dot.className = 'note-dot';
-        n.dot.style.cssText = `width:${DOT_PX}px;height:${DOT_PX}px;display:none`;
-        n.dot.note = n;
-        layer.appendChild(n.dot);
+  // stack the remaining blocks — images and text — in their set order.
+  // first image loads eagerly; the rest lazily so the top one appears fast.
+  // all images fade in when decoded for a smooth, non-janky reveal.
+  let imgIdx = 0;
+  blocks.slice(lead).forEach(block => {
+    if (block.type === 'text') {
+      // consecutive paragraphs share one text column
+      let box = sideTrack.lastElementChild;
+      if (!box || !box.classList.contains('side-text')) {
+        box = document.createElement('div');
+        box.className = 'side-text';
+        sideTrack.appendChild(box);
       }
-      notes.push(n);
-    });
-    // Who gets room first: an optional `priority` (higher first), then the order in map-notes.js
-    notes.sort((a, b) => (b.data.priority || 0) - (a.data.priority || 0) || a.order - b.order);
-
-    // Detail levels: 0 title · 1 title + short line · 2 title + longer description
-    function contentLevel(d, level) {
-      if (level >= 2 && d.long) return 2;
-      if (level >= 1 && d.text) return 1;
-      return 0;
+      box.insertAdjacentHTML('beforeend', paraHtml(block.text));
+      return;
     }
 
-    function addLine(parent, className, text) {
-      const div = document.createElement('div');
-      div.className = className;
-      div.textContent = text;
-      parent.appendChild(div);
-      return div;
+    const { src, caption } = block;
+    const fig = document.createElement('div');
+    fig.className = 'side-img';
+
+    const img = document.createElement('img');
+    img.loading  = imgIdx++ === 0 ? 'eager' : 'lazy';
+    img.decoding = 'async';
+    img.draggable = false;
+    const markLoaded = () => img.classList.add('loaded');
+    img.addEventListener('load', markLoaded, { once:true });
+    img.addEventListener('error', markLoaded, { once:true });
+    img.src = src;                       // reuses the prefetched/cached fetch
+    if (img.complete && img.naturalWidth) markLoaded();  // already cached
+    fig.appendChild(img);
+
+    if (caption) {
+      const cap = document.createElement('span');
+      cap.className = 'side-cap';
+      cap.textContent = caption;
+      fig.appendChild(cap);
     }
 
-    function buildItem(n, level) {
-      const lv = contentLevel(n.data, level);
-      const item = document.createElement('div');
-      item.className = 'note-item' + (lv === 2 ? ' is-long' : '');
-      item.note = n;
-      addLine(item, 'note-title', n.data.title || '');
-      if (lv === 1) addLine(item, 'note-desc', n.data.text);
-      if (lv === 2) addLine(item, 'note-long', n.data.long);
-      return item;
+    sideTrack.appendChild(fig);
+  });
+
+  // warm the related projects so they open instantly
+  relKeys.forEach(prefetchProject);
+
+  panelOpen = true;
+  currentProject = projectId;
+  document.body.classList.add('panel-open');
+
+  // give this project its own address: 600mt.com/#<key>
+  if (('#' + projectId) !== location.hash) {
+    history.replaceState(null, '', '#' + projectId);
+  }
+}
+
+function closePanel() {
+  if (!panelOpen) return;
+  panelOpen = false;
+  currentProject = null;
+  document.body.classList.remove('panel-open');
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  setTimeout(() => {
+    if (!panelOpen) {
+      sideTrack.innerHTML = '';
+      sideDesc.innerHTML = '';
+      sideClip.scrollTop = 0;
     }
+  }, 300);
+}
 
-    // ── Measure every note once, at every level, in em ──────────────────────
-    // Widths are in em and wrap at em widths, so one measurement holds at any text size.
-    const REF_PX = 20;
-    const lineSizes = new Map();   // "+ N more" / "N notes" → size
-    let measured = false;
+/* clicking a "Related works" button opens that project's panel */
+sideDesc.addEventListener('click', e => {
+  const btn = e.target.closest('.related-btn');
+  if (!btn) return;
+  const key = btn.dataset.related;
+  if (key && PROJECTS[key]) { sideClip.scrollTop = 0; openPanel(key); }
+});
 
-    function measureAll() {
-      measurer.style.fontSize = REF_PX + 'px';
-      measurer.textContent = '';
-      const jobs = [];
-      const wrap = child => {
-        const w = document.createElement('div');
-        w.className = 'note-label';
-        w.appendChild(child);
-        measurer.appendChild(w);
-        return w;
-      };
-      for (const n of notes) {
-        n.m = [];
-        for (let L = 0; L <= 2; L++)
-          if (contentLevel(n.data, L) === L) jobs.push([n.m, L, wrap(buildItem(n, L))]);
-      }
-      for (let c = 1; c <= notes.length; c++) {
-        for (const text of [moreText(c), allText(c)]) {
-          const d = document.createElement('div');
-          d.className = 'note-more';
-          d.textContent = text;
-          jobs.push([lineSizes, text, wrap(d)]);
-        }
-      }
-      for (const [target, key, el] of jobs) {
-        const r = el.getBoundingClientRect();
-        const size = { w: r.width / REF_PX, h: r.height / REF_PX };
-        if (target instanceof Map) target.set(key, size); else target[key] = size;
-      }
-      for (const n of notes) { n.m[1] = n.m[1] || n.m[0]; n.m[2] = n.m[2] || n.m[1]; }
-      measurer.textContent = '';
-      measured = true;
+/* ── URL routing: 600mt.com/#<key> opens a project directly ────
+   Reflects the open project in the address bar (see openPanel /
+   closePanel) and reacts to a hash present on load or changed via
+   the browser's back/forward buttons. */
+function projectFromHash() {
+  const key = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim();
+  return key && PROJECTS[key] ? key : null;
+}
+function syncPanelToHash() {
+  const key = projectFromHash();
+  if (key) {
+    if (key !== currentProject) { sideClip.scrollTop = 0; openPanel(key); }
+  } else if (panelOpen) {
+    closePanel();
+  }
+}
+window.addEventListener('hashchange', syncPanelToHash);
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+/* ── swipe right on the panel to close ─────────────────────── */
+let swX = 0, swY = 0, swActive = false, swScrollTop = 0;
+sidePanel.addEventListener('touchstart', e => {
+  swActive = true;
+  swX = e.touches[0].clientX;
+  swY = e.touches[0].clientY;
+  swScrollTop = sideClip.scrollTop;
+}, {passive:true});
+sidePanel.addEventListener('touchend', e => {
+  if (!swActive) return;
+  swActive = false;
+  const dx = e.changedTouches[0].clientX - swX;
+  const dy = e.changedTouches[0].clientY - swY;
+  // horizontal rightward swipe, not a vertical scroll of the content
+  if (dx > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) closePanel();
+}, {passive:true});
+
+/* ── carousel animation loop ──────────────────────────────────
+   The loop period height (mainOneH) is measured ONCE, from the
+   first list copy, as soon as it reports a stable non-zero
+   height — then locked. Re-measuring every frame used to make
+   the wrap point jump whenever a lazy image finished loading,
+   which read as the page "refreshing" during a fast scroll.
+   With eager carousel images + a one-time lock, the height is
+   stable and the scroll stays smooth. A resize re-unlocks it. */
+let heightLocked = false;
+function lockHeight() {
+  const liveH = carouselTrack.children[0] ? carouselTrack.children[0].offsetHeight : 0;
+  if (liveH > 0) {
+    if (liveH !== mainOneH) { mainOneH = liveH; mainC.setPos(mainC.getPos()); }
+    heightLocked = true;
+  }
+}
+function step(ts) {
+  if (!heightLocked) lockHeight();
+  mainC.step(ts);
+  updateThumb();
+  requestAnimationFrame(step);
+}
+
+/* ── prefetch a project's images before the panel opens ────── */
+// desktop: hovering a project image
+carouselClip.addEventListener('mousemove', e => {
+  const w = e.target.closest && e.target.closest('.image-wrapper.has-project');
+  if (w) prefetchProject(w.dataset.project);
+});
+// mobile: at the very start of a touch (fires before the tap resolves)
+carouselClip.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const w = el && el.closest('.image-wrapper.has-project');
+  if (w) prefetchProject(w.dataset.project);
+}, {passive:true});
+
+carouselClip.addEventListener('touchstart', e => mainC.touchStart(e), {passive:true});
+carouselClip.addEventListener('touchmove',  e => mainC.touchMove(e),  {passive:true});
+carouselClip.addEventListener('touchend',   e => {
+  const dy = mainC.touchEnd(e);
+  if (dy < 10) {
+    if (panelOpen) { closePanel(); return; }
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const w  = el && el.closest('.image-wrapper.has-project');
+    if (w) openPanel(w.dataset.project);
+  }
+}, {passive:true});
+
+let mDragActive = false, mDragY = 0, mDragPos0 = 0;
+carouselClip.addEventListener('mousedown', e => {
+  if (isMobile) return;
+  mDragActive = true; mDragY = e.clientY; mDragPos0 = mainC.getPos();
+  e.preventDefault();
+});
+document.addEventListener('mousemove', e => {
+  if (!mDragActive) return;
+  mainC.setPos(mDragPos0 + (mDragY - e.clientY));
+});
+document.addEventListener('mouseup', e => {
+  if (!mDragActive) return;
+  const wasDrag = Math.abs(mDragY - e.clientY) > 4;
+  mDragActive = false;
+  if (!wasDrag) {
+    if (panelOpen) { closePanel(); return; }
+    const w = e.target.closest('.image-wrapper.has-project');
+    if (w) openPanel(w.dataset.project);
+  }
+});
+
+carouselClip.addEventListener('wheel', e => {
+  e.preventDefault();
+  mainC.addWheel(e.deltaY);
+}, {passive: false});
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('dragstart',   e => e.preventDefault());
+
+const videoObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const video = entry.target;
+    if (entry.isIntersecting) {
+      if (video.readyState === 0) video.load();
+      video.play().catch(() => {});
+    } else {
+      video.pause();
     }
-    const lineSize = text => lineSizes.get(text) || { w: 4, h: LINE_HEIGHT };
+  });
+}, { rootMargin: '100% 0px' });
 
-    // ── Things notes must not cover: the menu, the attribution, phone insets ─
-    let fixedBoxes = [], insets = { t: 0, r: 0, b: 0, l: 0 }, fixedDirty = true;
-    function measureFixed() {
-      fixedDirty = false;
-      const base = mapEl.getBoundingClientRect();
-      fixedBoxes = [];
-      for (const node of document.querySelectorAll('#legend, .maplibregl-ctrl-attrib')) {
-        const r = node.getBoundingClientRect();
-        if (r.width && r.height)
-          fixedBoxes.push({ l: r.left - base.left, t: r.top - base.top, r: r.right - base.left, b: r.bottom - base.top });
-      }
-      const cs = getComputedStyle(insetProbe);
-      insets = {
-        t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0,
-        b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0,
-      };
+function filterImages() {
+  document.querySelectorAll('#image-list .image-wrapper').forEach(w => {
+    const d = w.dataset.device || 'both';
+    const show = d==='both'||(d==='mobile'&&isMobile)||(d==='desktop'&&!isMobile);
+    w.style.display = show ? 'block' : 'none';
+    // if (show && w.dataset.project) w.classList.add('has-project');
+    // disable
+  });
+}
+
+function duplicateMain() {
+  const clone = imageList.cloneNode(true);
+  clone.id = 'image-list-clone';
+  clone.querySelectorAll('video').forEach(v => videoObserver.observe(v));
+  // clone.querySelectorAll('.image-wrapper[data-project]').forEach(w => w.classList.add('has-project'));
+  //disable
+  carouselTrack.appendChild(clone);
+}
+
+function measure() {
+  const first = carouselTrack.children[0];
+  mainOneH = first ? first.offsetHeight : 0;
+  calcOffsets();
+}
+
+filterImages();
+document.querySelectorAll('#image-list video').forEach(v => videoObserver.observe(v));
+
+// eager-load the visible originals so the strip is complete before we show it
+const visImgs = [...imageList.querySelectorAll('.image-wrapper')]
+  .filter(w => w.style.display !== 'none')
+  .map(w => w.querySelector('img'))
+  .filter(Boolean);
+visImgs.forEach(img => { img.loading = 'eager'; if (!img.src) img.src = img.src; });
+
+function reveal() {
+  if (document.body.classList.contains('ready')) return;
+  buildThumbs();
+  duplicateMain();
+  measure();
+  buildThumbs();          // rebuild now that images have real dimensions
+  calcOffsets();
+  heightLocked = false;   // measure a fresh, stable height on the next frame
+  requestAnimationFrame(step);
+  document.body.classList.add('ready');
+  idlePrefetchProjects();  // warm project images in the background
+  syncPanelToHash();       // deep link: 600mt.com/#<key> opens that project
+}
+
+function imgDone(img) {
+  return new Promise(res => {
+    if (img.complete && img.naturalHeight > 0) return res();
+    img.addEventListener('load',  res, {once:true});
+    img.addEventListener('error', res, {once:true});
+  });
+}
+
+/* When the browser is idle, quietly prefetch the FIRST image of each
+   project so the panel's top image is instant even without a hover
+   (e.g. on mobile taps). Full sets still load on hover/touch/open. */
+function idlePrefetchProjects() {
+  const ids = Object.keys(PROJECTS || {});
+  let n = 0;
+  const run = () => {
+    if (n >= ids.length) return;
+    const p = PROJECTS[ids[n++]];
+    const first = p && projectImages(p)[0];
+    if (first) prefetchImg(first.src);
+    schedule();
+  };
+  const schedule = () => {
+    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout:1500 });
+    else setTimeout(run, 300);
+  };
+  schedule();
+}
+
+// reveal once every visible image is loaded (with a safety timeout)
+let revealed = false;
+const doReveal = () => { if (!revealed) { revealed = true; reveal(); } };
+Promise.all(visImgs.map(imgDone)).then(doReveal);
+setTimeout(doReveal, 4000);
+// on resize, re-measure the loop height once (unlock, then relock next frame)
+window.addEventListener('resize', () => { measure(); heightLocked = false; });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) {} });
+
+/* ── ARCHIVE VIEW ── */
+const archiveData = [
+  { type:'presentation', name:'New Approaches to Critical Geovisualisation', year:'2026', month:6, location:'Halle, DE', details:'Burg Halle', link:'https://www.burg-halle.de/artikel/a/neue-ansaetze-kritischer-geovisualisierung-2026' },
+  { type:'workshop', name:'JPG Investigation Unit', year:'2026', month:3, location:'Milan, IT', details:'Accademia Aldo Galli', link:'' },
+  { type:'residency', name:'-1 Digital Lab Residency', year:'2026', month:3, location:'Rotterdam, NL', details:'Het Nieuwe Instituut', link:'' },
+  { type:'exhibition', name:'-1 DEMO', year:'2026', month:7, location:'Rotterdam, NL', details:'Nieuwe Instituut', link:'' },
+  { type:'exhibition', name:'Shadow Circuits', year:'2026', month:3, location:'Rotterdam, NL', details:'MaMA', link:'' },
+  { type:'exhibition', name:'To The Horizon', year:'2026', month:2, location:'Warsaw, PL', details:'Aspekty Gallery. Collaborator: Sonia Gorecka', link:'' },
+  { type:'writing', name:'A Place Without a Name', year:'2026', month:1, location:'', details:'Metamorphic Zone', link:'https://metamorphiczone.com/field-notes/a-place-without-a-name' },
+  { type:'web-site', name:'Literary Atlas of Volcanic and seismic Activities', year:'2025', month:12, location:'', details:'Collaborators: Federico Poni, Henry Albert, Alice Bisio', link:'https://prisma.fileli.unipi.it/' },
+  { type:'exhibition', name:'Fuori Pista/Off-track', year:'2025', month:11, location:'Bergamo, IT', details:'GresArt 671, together with Studio Folder', link:'' },
+  { type:'exhibition', name:'Where to, from Here?', year:'2025', month:6, location:'Torino, IT', details:'Circolo del Design, together with Studio Folder', link:'' },
+  { type:'exhibition', name:'Always Container, Sometimes Contained', year:'2025', month:6, location:'Rotterdam', details:'Oud House, part of Rotterdam Architecture Month', link:'' },
+  { type:'funding', name:'Practical Contribution', year:'2025', month:5, location:'Rotterdam, NL', details:'CBK Rotterdam', link:'' },
+  { type:'exhibition', name:'Emergence', year:'2025', month:4, location:'Genova, IT', details:'Palazzo Bronzo. Collaborator: Sonia Gorecka', link:'' },
+  { type:'web-site', name:'Transmedia Research Institute', year:'2025', month:4, location:'', details:'Collaborator: Sonia Gorecka', link:'https://www.transmediaresearch.institute/2025' },
+  { type:'funding', name:'Matching fund with Voordekunst', year:'2025', month:3, location:'Rotterdam, NL', details:'Het Cultuurfonds', link:'' },
+  { type:'workshop', name:'Ultra Paesaggio Continuo: Photo-finish e osservatori mobili', year:'2025', month:3, location:'Torino, IT', details:'Circolo del Design, together with 4kHD', link:'' },
+  { type:'lecture', name:'Data Fragments', year:'2024', month:11, location:'Mendrisio, CH', details:'SUPSI. Together with Studio Folder', link:'' },
+  { type:'workshop', name:'Ultra Paesaggio Continuo: Laboratorio di immagini in movimento', year:'2024', month:10, location:'Treviso, IT', details:'Lost APS, together with 4kHD', link:'' },
+  { type:'exhibition', name:'All in! Re-Designing Democracy', year:'2024', month:5, location:'Bonn, DE', details:'Bundeskunsthalle, together with Studio Folder', link:'' },
+  { type:'workshop', name:'Anti-Navigation Tools', year:'2024', month:2, location:'Berlin, DE', details:'EKA Stand-in School, together with 4kHD', link:'https://stand-in.eka-gd-ma.ee/' },
+  { type:'web-site', name:'Frontiere della Transizione', year:'2023', month:12, location:'', details:'Collaborator: Alberto Valz Gris, Luca Draisci', link:'https://frontieredellatransizione.it/' },
+  { type:'presentation', name:"Racconti dai margini dell'urbanizzazione", year:'2023', month:7, location:'Milan, IT', details:"Società Studi Geografici", link:'' },
+  { type:'web-site', name:'Xenoplex, Antikythera 2023', year:'2023', month:4, location:'', details:'Collaborators: Jennifer Carniel, Filippo Elgorni', link:'https://xenoplex.org/' },
+  { type:'workshop', name:'Archiving Memories Workshop', year:'2022', month:2, location:'Rotterdam, NL', details:'Hogeschool Rotterdam', link:'' },
+  { type:'teaching', name:'Digital Methods Winter/Summer School', year:'2022-2025', month:1, location:'Amsterdam, NL', details:'University of Amsterdam', link:'https://www.digitalmethods.net/' },
+  { type:'teaching', name:'Density Design', year:'2020/21', month:9, location:'Milano, IT', details:'Politecnico di Milano, Teaching assistant', link:'https://densitydesign.org/' }
+];
+
+archiveData.sort((a, b) => {
+  const yearA = parseInt(a.year.split('/')[0]) || 0;
+  const yearB = parseInt(b.year.split('/')[0]) || 0;
+  if (yearB !== yearA) return yearB - yearA;
+  return (b.month || 0) - (a.month || 0);
+});
+
+function archIsUpcoming(item) {
+  const now = new Date();
+  const cy = now.getFullYear(), cm = now.getMonth() + 1;
+  const iy = parseInt(item.year.split('/')[0].split('-')[0]) || 0;
+  const im = item.month || 1;
+  return iy > cy || (iy === cy && im > cm);
+}
+function archGetLink(item) {
+  if (item.link && item.link.trim()) return item.link;
+  const m = item.name.match(/href="(https?:[^"]+)"/);
+  return m ? m[1] : null;
+}
+/* how each type reads inside an entry: "exhibition at <venue>".
+   Types missing from this list just show their own name. */
+const archPhrase = {
+  exhibition:'exhibition at', workshop:'workshop at', residency:'residency at',
+  presentation:'presentation at', lecture:'lecture at', teaching:'teaching at',
+  funding:'grant from', writing:'text for', 'web-site':'website for', projects:'project at',
+};
+
+/* "2022-2025" → "2022–25", "2020/21" → "2020–21", so ranges fit the year column */
+function archYear(item) {
+  return String(item.year).replace(/^(\d{4})[-\/](\d{2})?(\d{2})$/, '$1–$3');
+}
+
+/* Venue, city and collaborators for one entry.
+   An item can set `venue` and `with` explicitly; otherwise they are read
+   from `details` ("Venue. Collaborator: X" or "Venue, together with X"). */
+function archParts(item) {
+  let venue, withs;
+  if (item.venue !== undefined || item.with !== undefined) {
+    venue = item.venue || '';
+    withs = item.with || '';
+  } else {
+    const d = String(item.details || '').replace(/<[^>]+>/g, '').trim();
+    const m = d.match(/^(.*?)[.,]?\s*(?:collaborators?:|together with)\s*(.*)$/i);
+    venue = m ? m[1].trim() : d;
+    withs = m ? m[2].trim() : '';
+  }
+  // city without its country code, left out when the venue already names it
+  let city = String(item.location || '').replace(/,\s*[A-Z]{2}$/, '').trim();
+  if (city && venue.includes(city)) city = '';
+  return { venue, city, withs };
+}
+
+/* the title, linked when the entry has a link */
+function archTitle(item) {
+  const name = item.name.replace(/<[^>]+>/g, '');
+  const link = archGetLink(item);
+  return link ? `<a href="${link}" target="_blank" rel="noopener">${name}</a>` : name;
+}
+
+/* two lines per entry: the title, then everything else indented below it.
+   The second line starts with a capital, since it's a line of its own. */
+function archLines(item, parts) {
+  let meta = parts.filter(Boolean).join(', ');
+  meta = meta.charAt(0).toUpperCase() + meta.slice(1);
+  return `<div class="arch-title">${archTitle(item)}</div>`
+       + (meta ? `<div class="arch-meta">${meta}</div>` : '');
+}
+
+/* year view:  Title
+                 Exhibition at Venue, City, with X */
+function archEntryByYear(item) {
+  const { venue, city, withs } = archParts(item);
+  const phrase = archPhrase[item.type] || item.type || '';
+  const first = phrase ? (venue ? phrase + ' ' + venue : phrase.split(' ')[0]) : venue;
+  return archLines(item, [first, city, withs && 'with ' + withs,
+                          archIsUpcoming(item) && 'upcoming']);
+}
+
+/* type view:  Title
+                 Venue, City, with X, 2025
+   (the type is already in the margin) */
+function archEntryByType(item) {
+  const { venue, city, withs } = archParts(item);
+  return archLines(item, [venue, city, withs && 'with ' + withs,
+                          `<span class="arch-nowrap">${archYear(item)}</span>`,   // never split "2020–21"
+                          archIsUpcoming(item) && 'upcoming']);
+}
+
+/* the type groups, in this order. Rename or reorder freely;
+   a type that isn't listed here gets its own group at the end. */
+const archGroupDefs = [
+  { label: 'Exhibitions',             types: ['exhibition'] },
+  { label: 'Workshops, Teaching',     types: ['workshop', 'teaching'] },
+  { label: 'Presentations, Lectures', types: ['presentation', 'lecture'] },
+  { label: 'Residencies, Funding',    types: ['residency', 'funding'] },
+  { label: 'Projects',                types: ['projects'] },
+  { label: 'Web sites',               types: ['web-site'] },
+  { label: 'Writing',                 types: ['writing'] },
+];
+
+/* [{ label, items }] for the chosen view. archiveData is sorted newest
+   first, so entries stay in date order inside every group. */
+function archGroups(mode) {
+  const items = archiveData.filter(i => i.showInAll !== false);
+  if (mode === 'type') {
+    const known = archGroupDefs.flatMap(g => g.types);
+    const extra = [...new Set(items.map(i => i.type).filter(t => !known.includes(t)))]
+      .map(t => ({ label: t, types: [t] }));
+    return archGroupDefs.concat(extra)
+      .map(g => ({ label: g.label, items: items.filter(i => g.types.includes(i.type)) }))
+      .filter(g => g.items.length);
+  }
+  const groups = [];
+  items.forEach(item => {
+    const y = archYear(item);
+    const last = groups[groups.length - 1];
+    if (last && last.label === y) last.items.push(item);
+    else groups.push({ label: y, items: [item] });
+  });
+  return groups;
+}
+
+let archMode = 'type';   // the view the archive opens on: 'type' or 'year'
+function buildArchive() {
+  const content = document.getElementById('archive-content');
+  const entry = archMode === 'type' ? archEntryByType : archEntryByYear;
+  let ah = '';
+  archGroups(archMode).forEach(g => {
+    ah += `<div class="arch-group"><span>${g.label}</span><div>`;
+    g.items.forEach(item => { ah += `<div class="arch-entry">${entry(item)}</div>`; });
+    ah += '</div></div>';
+  });
+  content.className = 'by-' + archMode;
+  content.innerHTML = ah;
+}
+
+/* Year / Type switch */
+document.getElementById('arch-switch').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-mode]');
+  if (!btn || btn.dataset.mode === archMode) return;
+  archMode = btn.dataset.mode;
+  document.querySelectorAll('#arch-switch button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.mode === archMode)));
+  buildArchive();
+  document.getElementById('archive-view').scrollTop = 0;
+});
+
+function openArchive() {
+  buildArchive();
+  document.body.classList.add('archive-open');
+  document.getElementById('archive-view').scrollTop = 0;
+}
+function closeArchive() {
+  document.body.classList.remove('archive-open');
+}
+
+document.getElementById('archive-open').addEventListener('click', e => { e.preventDefault(); openArchive(); });
+document.getElementById('archive-back').addEventListener('click', e => { e.preventDefault(); closeArchive(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('archive-open')) closeArchive(); });
+
+/* ── ARCHIVE FLOAT ─────────────────────────────────────────────
+   On every load the archive link gets a random tilt and a random
+   spot in the space around the footer, never over its text.
+   Tune it here: */
+(function archiveFloat() {
+  const TILT_MIN = 4;     // degrees, either way: always visibly tilted…
+  const TILT_MAX = 30;    // …but never more than this
+  const REACH    = 2.5;   // how far from the footer text it may land, in em
+  const GAP      = 0.4;   // clear space it keeps from the footer text, in em
+
+  const el     = document.getElementById('archive-float');
+  const footer = document.getElementById('footer');
+
+  const tilt = (TILT_MIN + Math.random() * (TILT_MAX - TILT_MIN)) * (Math.random() < 0.5 ? -1 : 1);
+  const rad  = tilt * Math.PI / 180;
+
+  // reads the safe areas (notch, home bar) so it never lands under them
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;'
+    + 'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+  document.body.appendChild(probe);
+
+  let size, zone, pos = null;
+
+  // the tilted link's bounding box
+  function measureSize() {
+    const w = el.offsetWidth, h = el.offsetHeight;
+    const c = Math.abs(Math.cos(rad)), s = Math.abs(Math.sin(rad));
+    size = { w: w * c + h * s, h: w * s + h * c, lw: w, lh: h };
+  }
+
+  // the footer's text lines (kept clear) and the area around them it may use
+  function measureZone() {
+    const fs  = parseFloat(getComputedStyle(footer).fontSize) || 16;
+    const gap = GAP * fs, reach = REACH * fs;
+    const range = document.createRange();
+    range.selectNodeContents(footer);
+    const lines = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0);
+    if (!lines.length) lines.push(footer.getBoundingClientRect());
+
+    const box = {
+      l: Math.min(...lines.map(r => r.left)),  t: Math.min(...lines.map(r => r.top)),
+      r: Math.max(...lines.map(r => r.right)), b: Math.max(...lines.map(r => r.bottom)),
+    };
+    const safe   = getComputedStyle(probe);
+    const narrow = window.innerWidth <= 768;
+    const area = {
+      l: Math.max(5 + parseFloat(safe.paddingLeft), box.l - reach - size.w),
+      t: Math.max(5 + parseFloat(safe.paddingTop),  box.t - reach - size.h),
+      // desktop: keep clear of the thumbnail bar on the right
+      r: Math.min(window.innerWidth - (narrow ? 5 : 80) - parseFloat(safe.paddingRight), box.r + reach + size.w),
+      b: Math.min(window.innerHeight - 5 - parseFloat(safe.paddingBottom), box.b + reach + size.h),
+    };
+    // small screens: the archive's Year / Type switch sits below the footer, stay above it
+    if (narrow) {
+      const sw = document.getElementById('arch-switch');
+      area.b = Math.min(area.b, parseFloat(getComputedStyle(sw).paddingTop) - 5);
     }
+    zone = {
+      area,
+      keepOut: lines.map(r => ({ l: r.left - gap, t: r.top - gap, r: r.right + gap, b: r.bottom + gap })),
+    };
+  }
 
-    function noteSize(zoom, width) {
-      const t = Math.max(0, Math.min(1, (zoom - ZOOM_FAR) / (ZOOM_NEAR - ZOOM_FAR)));
-      const size = NOTE_SIZE_FAR + t * (NOTE_SIZE_NEAR - NOTE_SIZE_FAR);
-      return Math.round(Math.min(size, width * SIZE_PER_WIDTH) * 4) / 4;
+  // does the link fit with its centre at (x, y)?
+  function fits(x, y) {
+    const l = x - size.w / 2, r = x + size.w / 2, t = y - size.h / 2, b = y + size.h / 2;
+    const a = zone.area;
+    if (l < a.l || r > a.r || t < a.t || b > a.b) return false;
+    return zone.keepOut.every(k => r <= k.l || l >= k.r || b <= k.t || t >= k.b);
+  }
+
+  // a random free spot around the footer
+  function randomSpot() {
+    const a = zone.area, spanX = a.r - a.l - size.w, spanY = a.b - a.t - size.h;
+    if (spanX < 0 || spanY < 0) return null;
+    for (let i = 0; i < 200; i++) {
+      const q = { x: a.l + size.w / 2 + Math.random() * spanX, y: a.t + size.h / 2 + Math.random() * spanY };
+      if (fits(q.x, q.y)) return q;
     }
+    return null;
+  }
 
-    function showDot(n, p) {
-      if (!n.dot) return;
-      if (p) {
-        if (!n.dotOn) { n.dot.style.display = ''; n.dotOn = true; }
-        n.dot.style.transform = `translate(${Math.round(p.x - DOT_PX / 2)}px, ${Math.round(p.y - DOT_PX / 2)}px)`;
-      } else if (n.dotOn) {
-        n.dot.style.display = 'none'; n.dotOn = false;
-      }
-    }
+  // no free spot at all (a tiny window): just above the footer, or below it
+  function fallbackSpot() {
+    const top = Math.min(...zone.keepOut.map(k => k.t)), bottom = Math.max(...zone.keepOut.map(k => k.b));
+    const left = Math.min(...zone.keepOut.map(k => k.l));
+    return { x: left + size.w / 2, y: top - size.h >= 0 ? top - size.h / 2 : bottom + size.h / 2 };
+  }
 
-    // =========================================================================
-    // 🧩  LAYOUT: runs on every map move
-    //     1. find which notes are on screen
-    //     2. list notes that sit close together as one group
-    //     3. most important first, give each group the richest text that fits,
-    //        on the first side of its point where it stays on screen, clear of
-    //        the notes already placed and of every other point
-    // =========================================================================
-    const SIDES = ['right', 'left', 'right-up', 'left-up', 'right-mid', 'left-mid', 'below', 'above'];
-    const CELL = 64;   // grid used to find nearby points quickly
-    const cellKey = (cx, cy) => cx * 4096 + cy;
-    let shown = new Map();   // group key → label on screen
-    let lastSize = 0;
-    let canHover = window.matchMedia('(hover: hover)').matches;
+  // keeps its spot; only looks for a new one if the window change pushed it onto the text
+  function place() {
+    measureSize();
+    measureZone();
+    if (!pos || !fits(pos.x, pos.y)) pos = randomSpot() || fallbackSpot();
+    el.style.transform = `translate(${pos.x - size.lw / 2}px, ${pos.y - size.lh / 2}px) rotate(${tilt}deg)`;
+  }
 
-    function layout() {
-      if (!measured) return;
-      const W = mapEl.clientWidth, H = mapEl.clientHeight;
-      const zoom = map.getZoom();
-      const size = noteSize(zoom, W);
-      if (size !== lastSize) { layer.style.fontSize = size + 'px'; lastSize = size; }
-      layer.classList.toggle('can-zoom', zoom < LONG_MIN_ZOOM);
-      if (fixedDirty) measureFixed();
+  // the link swaps "Archive" for "← Back" when the archive opens: re-centre on the same spot
+  new MutationObserver(() => {
+    measureSize();
+    el.style.transform = `translate(${pos.x - size.lw / 2}px, ${pos.y - size.lh / 2}px) rotate(${tilt}deg)`;
+  }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  window.addEventListener('resize', place);
 
-      const ctx = {
-        size,
-        lh: LINE_HEIGHT * size,
-        dotGap: DOT_GAP_EM * size + DOT_PX / 2,
-        maxLevel: zoom >= LONG_MIN_ZOOM ? 2 : zoom >= SHORT_MIN_ZOOM ? 1 : 0,
-        maxLines: zoom >= LONG_MIN_ZOOM ? Infinity : GROUP_MAX_LINES,
-        view: { l: EDGE_PX + insets.l, t: EDGE_PX + insets.t, r: W - EDGE_PX - insets.r, b: H - EDGE_PX - insets.b },
-        boxes: fixedBoxes.slice(),
-        grid: new Map(),
-      };
-
-      // 1. on screen
-      const pts = [];
-      for (const n of notes) {
-        let p = null;
-        if (n.cat.visible) {
-          const q = map.project([n.data.lon, n.data.lat]);
-          if (q.x >= 0 && q.x <= W && q.y >= 0 && q.y <= H) p = q;
-        }
-        showDot(n, p);
-        if (!p) continue;
-        const pt = { n, x: p.x, y: p.y, group: null };
-        pts.push(pt);
-        const key = cellKey(Math.floor(p.x / CELL), Math.floor(p.y / CELL));
-        const cell = ctx.grid.get(key);
-        if (cell) cell.push(pt); else ctx.grid.set(key, [pt]);
-      }
-
-      // 2. groups: each note collects the less important ones within reach
-      const r2 = (GROUP_RADIUS_EM * size) ** 2;
-      const groups = [];
-      for (let i = 0; i < pts.length; i++) {
-        const a = pts[i];
-        if (a.group) continue;
-        const g = { members: [a] };
-        a.group = g;
-        for (let j = i + 1; j < pts.length; j++) {
-          const b = pts[j];
-          if (!b.group && (b.x - a.x) ** 2 + (b.y - a.y) ** 2 <= r2) { b.group = g; g.members.push(b); }
-        }
-        groups.push(g);
-      }
-
-      // 3. place
-      const next = new Map();
-      for (const g of groups) {
-        const pl = placeGroup(g, ctx);
-        if (!pl) continue;
-        ctx.boxes.push(pl.box);
-        next.set(pl.key, drawLabel(g, pl));
-      }
-      for (const [key, label] of shown) if (!next.has(key)) removeLabel(label);
-      shown = next;
-    }
-
-    function placeGroup(g, ctx) {
-      const ms = g.members;
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      for (const m of ms) {
-        if (m.x < x0) x0 = m.x; if (m.x > x1) x1 = m.x;
-        if (m.y < y0) y0 = m.y; if (m.y > y1) y1 = m.y;
-      }
-      const anchor = { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
-      const key = ms.map(m => m.n.id).join(',');
-      const prev = shown.get(key);
-      const count = ms.length, cap = Math.min(count, ctx.maxLines);
-
-      // richest first: full detail for everyone, then titles only, then shorter lists
-      const tries = [];
-      for (let L = ctx.maxLevel; L >= 1; L--)
-        if (ms.slice(0, cap).some(m => contentLevel(m.n.data, L) === L)) tries.push([L, cap]);
-      for (let k = cap; k >= (count > 1 ? 0 : 1); k--) tries.push([0, k]);
-
-      // keep the side it had last frame, so labels don't jump around while you move
-      const sides = prev ? [prev.side, ...SIDES.filter(s => s !== prev.side)] : SIDES;
-
-      for (const [level, k] of tries) {
-        const [w, h] = labelSize(ms, level, k, ctx);
-        for (const side of sides) {
-          const box = boxAt(side, w, h, anchor, ctx);
-          if (fits(box, ctx, g)) return { key, level, k, side, box };
-        }
-      }
-      return null;   // no room: only its points show until you zoom in
-    }
-
-    function labelSize(ms, level, k, ctx) {
-      const s = ctx.size, count = ms.length;
-      if (k === 0) { const m = lineSize(allText(count)); return [Math.ceil(m.w * s) + 1, Math.ceil(m.h * s) + 1]; }
-      const gap = level > 0 ? ITEM_GAP_EM : 0;
-      let w = 0, h = 0;
-      for (let i = 0; i < k; i++) { const m = ms[i].n.m[level]; if (m.w > w) w = m.w; h += m.h; }
-      h += (k - 1) * gap;
-      if (k < count) { const m = lineSize(moreText(count - k)); if (m.w > w) w = m.w; h += gap + m.h; }
-      return [Math.ceil(w * s) + 1, Math.ceil(h * s) + 1];
-    }
-
-    function boxAt(side, w, h, a, ctx) {
-      const d = ctx.dotGap, half = ctx.lh / 2;
-      let l, t;
-      switch (side) {
-        case 'right':     l = a.x1 + d;     t = a.cy - half;     break;   // first line level with the point
-        case 'left':      l = a.x0 - d - w; t = a.cy - half;     break;
-        case 'right-up':  l = a.x1 + d;     t = a.cy + half - h; break;   // last line level with the point
-        case 'left-up':   l = a.x0 - d - w; t = a.cy + half - h; break;
-        case 'right-mid': l = a.x1 + d;     t = a.cy - h / 2;    break;
-        case 'left-mid':  l = a.x0 - d - w; t = a.cy - h / 2;    break;
-        default: {        // below / above, slid sideways to stay on screen
-          const v = ctx.view;
-          l = Math.max(v.l, Math.min(v.r - w, a.cx - w / 2));
-          t = side === 'below' ? a.y1 + d : a.y0 - d - h;
-        }
-      }
-      return { l, t, r: l + w, b: t + h };
-    }
-
-    function fits(b, ctx, group) {
-      const v = ctx.view;
-      if (b.l < v.l || b.t < v.t || b.r > v.r || b.b > v.b) return false;
-      for (const o of ctx.boxes)
-        if (b.l < o.r + GAP_PX && b.r + GAP_PX > o.l && b.t < o.b + GAP_PX && b.b + GAP_PX > o.t) return false;
-      {   // don't cover other notes' points
-        const pad = DOT_PX / 2 + 1;
-        const cx0 = Math.max(0, Math.floor((b.l - pad) / CELL)), cx1 = Math.floor((b.r + pad) / CELL);
-        const cy0 = Math.max(0, Math.floor((b.t - pad) / CELL)), cy1 = Math.floor((b.b + pad) / CELL);
-        for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) {
-          const cell = ctx.grid.get(cellKey(cx, cy));
-          if (cell) for (const p of cell)
-            if (p.group !== group && p.x > b.l - pad && p.x < b.r + pad && p.y > b.t - pad && p.y < b.b + pad) return false;
-        }
-      }
-      return true;
-    }
-
-    function drawLabel(g, pl) {
-      let label = shown.get(pl.key);
-      if (!label) {
-        const el = document.createElement('div');
-        el.className = 'note-label';
-        label = { el, notes: g.members.map(m => m.n), level: -1, k: -1, side: '' };
-        el.label = label;
-        if (canHover) {
-          el.addEventListener('mouseenter', () => { layer.classList.add('dimmed'); el.classList.add('is-hovered'); });
-          el.addEventListener('mouseleave', () => { layer.classList.remove('dimmed'); el.classList.remove('is-hovered'); });
-        }
-        layer.appendChild(el);
-      }
-      if (label.level !== pl.level || label.k !== pl.k) fillLabel(label, pl.level, pl.k);
-      if (label.side !== pl.side) {
-        label.side = pl.side;
-        label.el.classList.toggle('align-right', pl.side.startsWith('left'));
-      }
-      label.el.style.transform = `translate(${Math.round(pl.box.l)}px, ${Math.round(pl.box.t)}px)`;
-      return label;
-    }
-
-    function fillLabel(label, level, k) {
-      const el = label.el, count = label.notes.length;
-      el.textContent = '';
-      el.classList.toggle('detailed', level > 0);
-      if (k === 0) addLine(el, 'note-more', allText(count));
-      for (let i = 0; i < k; i++) el.appendChild(buildItem(label.notes[i], level));
-      if (k > 0 && k < count) addLine(el, 'note-more', moreText(count - k));
-      label.level = level; label.k = k;
-    }
-
-    function removeLabel(label) {
-      if (label.el.classList.contains('is-hovered')) layer.classList.remove('dimmed');
-      label.el.remove();
-    }
-
-    // =========================================================================
-    // 👆  CLICK A POINT OR TITLE TO ZOOM IN ON IT, "+ N more" TO OPEN THE GROUP
-    // =========================================================================
-    let pressAt = null;
-    layer.addEventListener('pointerdown', e => { pressAt = [e.clientX, e.clientY]; });
-    layer.addEventListener('click', e => {
-      if (pressAt && Math.hypot(e.clientX - pressAt[0], e.clientY - pressAt[1]) > 6) return;   // was a drag
-      const dot = e.target.closest('.note-dot');
-      const item = e.target.closest('.note-item');
-      const more = e.target.closest('.note-more');
-      if (dot) zoomInOn([dot.note]);
-      else if (item) zoomInOn([item.note]);
-      else if (more) zoomInOn(more.closest('.note-label').label.notes);
-    });
-
-    function zoomInOn(list) {
-      const zoom = map.getZoom();
-      if (list.length === 1) {
-        if (zoom >= LONG_MIN_ZOOM) return;
-        map.easeTo({ center: [list[0].data.lon, list[0].data.lat], zoom: Math.min(LONG_MIN_ZOOM, zoom + 3) });
-        return;
-      }
-      const bounds = new maplibregl.LngLatBounds();
-      list.forEach(n => bounds.extend([n.data.lon, n.data.lat]));
-      const pad = Math.min(120, mapEl.clientWidth / 5, mapEl.clientHeight / 5);
-      map.fitBounds(bounds, { padding: pad, maxZoom: 19 });
-    }
-
-    // =========================================================================
-    // 🗂  MENU: one toggle per category that has notes on the map
-    // =========================================================================
-    function buildLegend() {
-      const legend = document.getElementById('legend');
-      for (const cat of categories.values()) {
-        const count = notes.filter(n => n.cat === cat).length;
-        if (!count) continue;
-
-        const label = document.createElement('label');
-        const box = document.createElement('input');
-        box.type = 'checkbox';
-        box.checked = cat.visible;
-        box.addEventListener('change', () => {
-          cat.visible = box.checked;
-          layout();
-        });
-
-        const name = document.createElement('span');
-        name.textContent = cat.label;
-        const num = document.createElement('span');
-        num.className = 'count';
-        num.textContent = '(' + count + ')';
-
-        label.append(box, name, num);
-        legend.appendChild(label);
-      }
-      if (!legend.children.length) legend.remove();
-    }
-
-    // =========================================================================
-    // 📥  START
-    // =========================================================================
-    buildLegend();
-    measureAll();
-    layout();
-
-    map.on('move', layout);
-    map.on('resize', () => { fixedDirty = true; layout(); });
-    map.on('load', () => {
-      const attrib = document.querySelector('.maplibregl-ctrl-attrib');
-      if (attrib) attrib.classList.add('maplibregl-compact');
-      fixedDirty = true;
-      layout();
-    });
-    // the attribution opens and closes when clicked: keep notes clear of it
-    document.addEventListener('click', e => {
-      if (e.target.closest && e.target.closest('.maplibregl-ctrl-attrib'))
-        requestAnimationFrame(() => { fixedDirty = true; layout(); });
-    });
-    window.matchMedia('(hover: hover)').addEventListener?.('change', e => { canHover = e.matches; });
-    if (document.fonts) document.fonts.ready.then(() => { measureAll(); layout(); });
-  </script>
+  place();
+  el.style.visibility = 'visible';
+})();
+</script>
 </body>
 </html>

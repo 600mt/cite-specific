@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mappa Matte</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background-color: #d6e7eb;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+      background-color: #d6ebdd;
+    }
+
+    #text {
+      position: fixed;
+      top: 0vh;
+      left: 10vw;
+      width: 50vw;
+      text-align: left;
+      z-index: 1000;
+      font-family: 'Comic Sans MS';
+      font-size: 40px;
+      background-color: transparent;
+      cursor: pointer;
+    }
+
+    .leaflet-control-zoom {
+      display:none;
+    }
+
+    .note-label {
+      background: transparent;
+      padding: 3px 5px;
+      border-radius: 6px;
+      white-space: nowrap;
+      font-family: 'Comic Sans MS';
+      color: inherit;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    .leaflet-popup-content-wrapper {
+      background: white;
+      color: black;
+      font-family: 'Comic Sans MS';
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .leaflet-popup-tip {
+      background: transparent;
+    }
+
+    .leaflet-popup-content {
+      font-size: 1.2em;
+      text-align: center;
+      margin: 0;
+    }
+
+    #filter {
+      position: fixed;
+      left: 10px;
+      bottom: 10px;
+      top: 10px;
+      background: transparent;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: sans-serif;
+      z-index: 1001;
+      max-height: 100vh;
+      width: 7vw;
+      overflow-y: auto;
+      scrollbar-color: transparent transparent;
+      font-size: 14px;
+      
+    }
+
+    .filter-btn {
+      font-size: 3em;
+      cursor: pointer;
+      margin: 2px;
+      padding: 1px 1px;
+      border: none;
+      background: transparent;
+      opacity: 100%;
+    }
+
+    .filter-btn.active {
+      background-color: transparent;
+      opacity: 100%;
+    }
+
+    .filter-btn:not(.active) {
+      opacity: 50%;
+    }
+
+    /* Detail Panel - Desktop */
+    .detail-view {
+      display: none;
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      border-radius: 50px;
+      width: 35vw;
+      height: 94vh;
+      overflow-y: auto;
+      z-index: 100;
+      padding: 20px;
+      background: #ffffff;
+      border-left: 1px solid rgb(235, 235, 235);
+    }
+
+    .detail-view.open {
+      display: block;
+    }
+
+    .detail-content {
+      max-width: 100%;
+      padding-bottom: 80px;
+      text-align: center ;
+    }
+
+    .detail-header {
+      margin-bottom: 20px;
+      text-align: center;
+      padding-bottom: 15px;
+    }
+
+    .detail-emoji {
+      font-size: 3em;
+      margin-bottom: 10px;
+    }
+
+    .detail-name {
+      font-size: 1em;
+      margin-bottom: 8px;
+      font-weight: normal;
+    }
+
+    .detail-category {
+      font-size: 0.75em;
+      color: rgb(0, 0, 0);
+      margin-bottom: 5px;
+    }
+
+    .detail-coords {
+      font-size: 0.75em;
+      color: rgb(77, 77, 77);
+      font-family: monospace;
+    }
+
+    .detail-description {
+      font-size: 0.9em;
+      line-height: 1.6;
+      color: rgb(60, 60, 60);
+      margin-top: 20px;
+    }
+
+    .detail-description p {
+      margin-bottom: 12px;
+    }
+
+    .close-btn {
+      border-radius: 20px;
+      position: fixed;
+      bottom: 30px;
+      right: calc(35vw / 2 - 40px);
+      padding: 12px 30px;
+      font-family: inherit;
+      font-size: 0.85em;
+      background: rgba(255, 255, 255, 0.47);
+      cursor: pointer;
+      border: none;
+      z-index: 101;
+      transition: opacity 0.2s ease;
+    }
+
+    .close-btn:hover {
+      opacity: 0.5;
+    }
+
+
+    /* Mobile styles */
+    @media (max-width: 768px) {
+      #map {
+        bottom: 0;
+      }
+
+      .detail-view {
+        width: 100vw;
+        height: calc(50vh - 10px);
+        top: auto;
+        align-items: center;
+        bottom: -50vh;
+        left: 2%;
+        right: 2%;
+        border-radius: 20px 20px 0 0;
+        border-left: none;
+        border-top: 1px solid rgb(220, 220, 220);
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        transition: bottom 0.3s ease;
+      }
+
+      .detail-view.open {
+        display: flex;
+        bottom: 10px;
+      }
+
+      .detail-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 30px 35px 100px 35px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .detail-header {
+        text-align: center;
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid rgb(240, 240, 240);
+        width: 100%;
+        max-width: 300px;
+      }
+
+      .detail-emoji {
+        font-size: 2.5em;
+        margin-bottom: 12px;
+      }
+
+      .detail-name {
+        font-size: 1.1em;
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
+
+      .detail-category {
+        font-size: 0.8em;
+        margin-bottom: 6px;
+      }
+
+      .detail-coords {
+        font-size: 0.7em;
+      }
+
+      .detail-description {
+        text-align: center;
+        font-size: 0.9em;
+        line-height: 1.75;
+        margin-top: 10px;
+        max-width: 300px;
+        color: rgb(80, 80, 80);
+      }
+
+      .detail-description p {
+        margin-bottom: 10px;
+      }
+
+      .close-btn {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        bottom: auto;
+        left: auto;
+        transform: none;
+        padding: 8px 18px;
+        font-size: 0.8em;
+        background: rgba(255, 255, 255, 1);
+      }
+
+#filter {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: 20px;
+  top: auto;
+  width: auto;
+  max-height: none;
+  font-size: 25px;
+  height: fit-content;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0);
+  border-radius: 12px;
+  transition: bottom 0.3s ease;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  
+}
+
+      #filter.panel-open {
+        bottom: calc(50vh + 10px);
+      }
+
+      .filter-btn {
+        font-size: 1.3em;
+        margin: 3px;
+        padding: 5px 7px;
+      }
+
+      #text {
+        font-size: 24px;
+        left: 5vw;
+      }
+
+    }
+
+    /* Extra small screens */
+    @media (max-width: 400px) {
+      .detail-content {
+        padding: 25px 30px 90px 30px;
+      }
+
+      .detail-header {
+        max-width: 260px;
+      }
+
+      .detail-description {
+        max-width: 260px;
+        font-size: 0.85em;
+        line-height: 1.7;
+      }
+
+      .detail-name {
+        font-size: 1em;
+      }
+
+      .filter-btn {
+        font-size: 1.1em;
+        margin: 2px;
+        padding: 4px 5px;
+      }
+
+      #filter {
+        padding: 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="text"><p></p></div>
+  <div id="filter"></div>
+
+  <div id="map"></div>
+
+  <!-- Detail Panel -->
+  <div class="detail-view" id="detail-view">
+    <button class="close-btn" id="detail-close">Close</button>
+    <div class="detail-content" id="detail-content"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script>
+    const defaultCenter = [47.9536, 10.4782];
+    const defaultZoom = 6;
+    const map = L.map('map', {
+      center: defaultCenter,
+      zoom: defaultZoom,
+      minZoom: 3,
+      maxZoom: 19
+    });
+
+    // L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
+    //   subdomains: 'abcd',
+    //   maxZoom: 20
+    // }).addTo(map);
+
+    // Layer etichette sopra
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 20,
+      pane: 'shadowPane' // Mette le etichette sotto i marker
+    }).addTo(map);
+
+
+    // Category names for display
+    const categoryNames = {
+      "⛓️‍💥": "Perchè perchè Perchè",
+      "🫧": "Scorciatoie",
+      "🧀": "Cibello",
+      "🫗": "Bar veri",
+      "🌰": "PostoCastagna",
+      "🫘": "Indizi-fagioli",
+      "🧱": "Case Cose Architetture",
+      "🪞": "Infrastrutture",
+      "🪨": "Pietre",
+      "💧": "Acque",
+      "🌫️": "Margini",
+      "⭐": "Luoghi Salvati (Google Maps)"
+    };
+
+    const points = [
+      // Original points
+      { lat: 45.818361, lon: 8.544306, emoji: "⛓️‍💥", name: "Tornanti per Massino", 
+        description: "" },
+      { lat: 45.779058, lon: 8.490973, emoji: "🫧", name: "Scorciatoia per Colazza",
+        description: "" },
+      { lat: 45.841689, lon: 8.509383, emoji: "⛓️‍💥", name: "Passo ripidissimo Brovello-Agogna",
+        description: "" },
+      { lat: 45.820312, lon: 8.476086, emoji: "🫧", name: "Valle Agogna chill",
+        description: "" },
+      { lat: 45.808149, lon: 8.527779, emoji: "🫧", name: "Sentierino Ruscello Nebbiuno",
+        description: "" },
+      { lat: 45.810090, lon: 8.530719, emoji: "🫧", name: "Campiglia",
+        description: "" },
+      { lat: 45.802998, lon: 8.516184, emoji: "🧀", name: "Circolo Ricreativo Tapigliano",
+        description: "" },
+      { lat: 45.935912, lon: 8.237193, emoji: "🧀", name: "Locanda Alla Vetta Del Capezzone",
+        description: "" },
+      { lat: 45.842494, lon: 8.426396, emoji: "🧀", name: "Cooperativa Agricola Il Glicine",
+        description: "" },
+      { lat: 45.805945, lon: 8.524806, emoji: "🫗", name: "Bar Centrale di Anna",
+        description: "" },
+      { lat: 45.808135, lon: 8.514791, emoji: "🧀", name: "Il Gatto blu",
+        description: "" },
+      { lat: 45.804028, lon: 8.529583, emoji: "🌰", name: "Castagna bosco Ca Bianca",
+        description: "" },
+      { lat: 45.867932, lon: 8.514982, emoji: "🫘", name: "Golf Club Panorama",
+        description: "" },
+      { lat: 45.881424, lon: 8.453851, emoji: "🪞", name: "Antenna Mottarone",
+        description: "" },
+      { lat: 45.861851, lon: 8.510424, emoji: "🧱", name: "Museo dell'Ombrello",
+        description: "" },
+      { lat: 45.935982, lon: 8.236817, emoji: "🫘", name: "Campo di bocce",
+        description: "" },
+      { lat: 45.918363, lon: 8.410624, emoji: "🧱", name: "Complesso del Getsemani",
+        description: "" },
+      { lat: 46.056990, lon: 8.187593, emoji: "🪞", name: "Specchio di Viganella",
+        description: "" },
+      { lat: 46.068592, lon: 8.261172, emoji: "🧱", name: "Chiesa di Cristo Risorto",
+        description: "" },
+      { lat: 45.871093, lon: 8.500914, emoji: "🪨", name: "Sasso Papale",
+        description: "" },
+      { lat: 45.800936, lon: 8.506465, emoji: "🪨", name: "Sass Preiatecia",
+        description: "" },
+      { lat: 45.813353, lon: 8.513610, emoji: "🪨", name: "Sass dal Pizz",
+        description: "" },
+      { lat: 45.851380, lon: 8.442290, emoji: "🪨", name: "Sas da Lom",
+        description: "" },
+      { lat: 45.798796, lon: 8.587589, emoji: "🪨", name: "Sass Cavalasc",
+        description: "" },
+      { lat: 45.841931, lon: 8.429478, emoji: "💧", name: "Pozze del Pescone",
+        description: "" },
+      { lat: 45.819996, lon: 8.564658, emoji: "💧", name: "Spiaggia Castellaccio (Lesa)",
+        description: "" },
+      { lat: 46.122293, lon: 8.205360, emoji: "🌫️", name: "Terme di Bognanco",
+        description: "" },
+      { lat: 45.806166, lon: 8.529071, emoji: "🧱", name: "Rocca sotto al rio Colorio",
+        description: "" },
+      { lat: 45.796324, lon: 8.533251, emoji: "🫘", name: "Sentiero per la stazione",
+        description: "" },
+      { lat: 45.787375, lon: 8.539582, emoji: "🫘", name: "Salita a Santa Margherita",
+        description: "" },
+      { lat: 45.881601, lon: 8.508976, emoji: "💧", name: "Fonte Purissima",
+        description: "" },
+      { lat: 45.928689, lon: 8.480501, emoji: "💧", name: "Spiaggia di Feriolo",
+        description: "" },
+      { lat: 45.880582, lon: 8.484975, emoji: "🌫️", name: "Torbiera Borromea",
+        description: "" },
+      { lat: 45.821818, lon: 8.439286, emoji: "🧱", name: "Piazza Armeno pre-mottarone",
+        description: "" },
+      { lat: 45.823044, lon: 8.539274, emoji: "🧱", name: "Centro Massino",
+        description: "" },
+      { lat: 45.829499, lon: 8.564052, emoji: "🫗", name: "Circolo di Lesa",
+        description: "" },
+      { lat: 46.173646, lon: 8.313512, emoji: "🧀", name: "Circolo Oira...Ricreativo",
+        description: "" },
+      { lat: 45.877543, lon: 8.402481, emoji: "💧", name: "Strona di Omegna",
+        description: "" },
+      { lat: 45.959236, lon: 8.521217, emoji: "🌫️", name: "Ponte rotto a Santino",
+        description: "" },
+      { lat: 45.967186, lon: 8.496326, emoji: "💧", name: "Centrale dell'Enel Rovegro",
+        description: "" },
+      { lat: 46.012969, lon: 8.539424, emoji: "🧱", name: "Rifugio Pian Cavallone",
+        description: "" },
+      { lat: 46.072283, lon: 8.605042, emoji: "⛓️‍💥", name: "Valle Cannobina",
+        description: "" },
+      { lat: 46.140405, lon: 8.564615, emoji: "🌫️", name: "Dissimo",
+        description: "" },
+      { lat: 46.060594, lon: 8.668455, emoji: "💧", name: "Orrido di Sant'Anna",
+        description: "" },
+
+      // ===== SAVED PLACES FROM GOOGLE MAPS =====
+      // ===== LUOGHI SALVATI DA GOOGLE MAPS (Batch 1) =====
+// ===== LUOGHI SALVATI DA GOOGLE MAPS (Batch 1 + 2) =====
+      
+      // 🧀 Cibello (ristoranti, forni, cibo)
+      { lat: 43.717958, lon: 10.403097, emoji: "🧀", name: "SudPisa", description: "" },
+      { lat: 51.9133233, lon: 4.4601855, emoji: "🧀", name: "Urban Espresso Bar / UEB WEST", description: "" },
+      { lat: 51.9278226, lon: 4.5020953, emoji: "🧀", name: "Fajne Bistro", description: "" },
+      { lat: 45.5997471, lon: 8.9150769, emoji: "🧀", name: "Il Padelghiotto", description: "" },
+      { lat: 45.4516135, lon: 9.2077255, emoji: "🧀", name: "Forno Ambrosiano", description: "" },
+      { lat: 45.4856717, lon: 9.231587, emoji: "🧀", name: "Birrificio Lambrate Adelchi", description: "" },
+      { lat: 52.4866815, lon: 13.4393703, emoji: "🧀", name: "Knödelwirtschaft", description: "" },
+      { lat: 49.747163, lon: 18.630451, emoji: "🧀", name: "Stacja Smaków-AM", description: "" },
+      { lat: 45.6432544, lon: 25.590875, emoji: "🧀", name: "Bistro de l'Arte", description: "" },
+      { lat: 52.264988, lon: 20.9712887, emoji: "🧀", name: "Bar mleczny Sady", description: "" },
+      { lat: 41.8955166, lon: 12.4715911, emoji: "🧀", name: "Osteria da Fortunata - Baullari", description: "" },
+      { lat: 44.4437917, lon: 26.096255, emoji: "🧀", name: "La Băiatu specialități turcești", description: "" },
+      { lat: 44.4379585, lon: 26.0964299, emoji: "🧀", name: "Artichoke", description: "" },
+      { lat: 45.0752265, lon: 7.6825195, emoji: "🧀", name: "Trattoria Cinese", description: "" },
+      { lat: 45.0914375, lon: 7.6893148, emoji: "🧀", name: "Il Cavaliere", description: "" },
+      { lat: 52.3712902, lon: 4.8963783, emoji: "🧀", name: "Proeflokaal 't Kelkje", description: "" },
+      { lat: 52.3598821, lon: 4.9110865, emoji: "🧀", name: "YUSU", description: "" },
+      { lat: 52.3611217, lon: 4.9068606, emoji: "🧀", name: "Bakhuys Amsterdam", description: "" },
+      { lat: 52.3750058, lon: 4.8907467, emoji: "🧀", name: "Caldi e freddi", description: "" },
+      { lat: 52.388918, lon: 4.879626, emoji: "🧀", name: "Hummus & Habibis Restaurant and Catering", description: "" },
+      { lat: 45.808146, lon: 8.514779, emoji: "🧀", name: "Gatto Blu", description: "" },
+      { lat: 51.9289077, lon: 4.4754423, emoji: "🧀", name: "de teyl inn sushi", description: "" },
+      { lat: 51.9130878, lon: 4.4586883, emoji: "🧀", name: "Pistache Halab", description: "" },
+      { lat: 50.8322694, lon: 4.3428572, emoji: "🧀", name: "Boulengier", description: "" },
+      { lat: 52.3688604, lon: 4.9486135, emoji: "🧀", name: "Millie Vanillie", description: "" },
+      { lat: 38.7190867, lon: -9.1215863, emoji: "🧀", name: "Paquito", description: "" },
+      { lat: 45.0787206, lon: 7.7323829, emoji: "🧀", name: "Ristorante Ponte Barra", description: "" },
+      { lat: 45.0832917, lon: 7.6841612, emoji: "🧀", name: "Locanda sul Fiume", description: "" },
+      { lat: 45.0899816, lon: 7.6913552, emoji: "🧀", name: "Da Baffo", description: "" },
+      { lat: 45.0802631, lon: 7.6898311, emoji: "🧀", name: "La Trota che Fuma", description: "" },
+      { lat: 44.4094637, lon: 8.9326854, emoji: "🧀", name: "Cremeria Buonafede Genova", description: "" },
+      { lat: 44.3609002, lon: 9.1341112, emoji: "🧀", name: "Ciappea", description: "" },
+      { lat: 44.3505887, lon: 9.1525318, emoji: "🧀", name: "Pasta Fresca Fiorella", description: "" },
+      { lat: 44.4107937, lon: 8.931118, emoji: "🧀", name: "Bottega Ciacchi", description: "" },
+      { lat: 44.4101627, lon: 8.9338857, emoji: "🧀", name: "Bar latteria di vico speranza", description: "" },
+      { lat: 44.4086831, lon: 8.9301474, emoji: "🧀", name: "Trattoria da asporto e da sosta", description: "" },
+      { lat: 44.4065407, lon: 8.9326142, emoji: "🧀", name: "Antica Drogheria Casaleggio", description: "" },
+      { lat: 44.4089802, lon: 8.9329233, emoji: "🧀", name: "Antico Forno della Casana", description: "" },
+
+      // 🫗 Bar veri
+      { lat: 45.4909849, lon: 9.183946, emoji: "🫗", name: "Section80Bar", description: "" },
+      { lat: 52.2298025, lon: 21.016383, emoji: "🫗", name: "Bibenda", description: "" },
+      { lat: 52.2602858, lon: 21.0027329, emoji: "🫗", name: "BAKEN bar", description: "" },
+      { lat: 52.5170556, lon: 20.680639, emoji: "🫗", name: "Chata nad Wkrą & Bar KOZA", description: "" },
+      { lat: 52.2593902, lon: 21.0368859, emoji: "🫗", name: "Chmury", description: "" },
+      { lat: 52.3790814, lon: 4.8846269, emoji: "🫗", name: "café R. de Rosa", description: "" },
+      { lat: 45.0791911, lon: 7.6833129, emoji: "🫗", name: "Tut Vin", description: "" },
+      { lat: 44.4129366, lon: 8.9333927, emoji: "🫗", name: "Calice", description: "" },
+      { lat: 44.3508808, lon: 9.152109, emoji: "🫗", name: "Hook", description: "" },
+
+      // 🧱 Case Cose Architetture (musei, architettura, spazi culturali)
+      { lat: 45.5939996, lon: 8.9188797, emoji: "🧱", name: "Sala Ratti", description: "" },
+      { lat: 52.231433, lon: 21.0122263, emoji: "🧱", name: "ZODIAK Warsaw Architecture Pavilion", description: "" },
+      { lat: 52.24966, lon: 21.0114409, emoji: "🧱", name: "Association of Art Historians", description: "" },
+      { lat: 40.8200865, lon: 14.2146269, emoji: "🧱", name: "Palazzo Donn'Anna", description: "" },
+      { lat: 44.4372286, lon: 26.0626771, emoji: "🧱", name: "Giardino botanico di Bucarest", description: "" },
+      { lat: 45.0619368, lon: 7.6428737, emoji: "🧱", name: "Fondazione Merz", description: "" },
+      { lat: 45.0330162, lon: 7.6659071, emoji: "🧱", name: "Pinacoteca Giovanni e Marella Agnelli", description: "" },
+      { lat: 45.0800905, lon: 7.6967965, emoji: "🧱", name: "Mucho Mas! Artist-run space", description: "" },
+      { lat: 45.0678943, lon: 7.688475, emoji: "🧱", name: "Magazzini Delta", description: "" },
+      { lat: 45.0668049, lon: 7.6903079, emoji: "🧱", name: "Progetto Immagine", description: "" },
+      { lat: 51.9328377, lon: 4.4681435, emoji: "🧱", name: "Telecom Museum", description: "" },
+      { lat: 52.386375, lon: 4.8735, emoji: "🧱", name: "Het Ketelhuis (Movie Theater and Bar)", description: "" },
+      { lat: 45.8618564, lon: 8.5104065, emoji: "🧱", name: "Museo dell'ombrello e del parasole", description: "" },
+      { lat: 45.0525731, lon: 7.6817258, emoji: "🧱", name: "Dipartimento di Scienze della Terra - UniTo", description: "" },
+      { lat: 45.0600534, lon: 7.6973527, emoji: "🧱", name: "Club Alpino Italiano - Monte dei Cappuccini", description: "" },
+      { lat: 45.0596019, lon: 7.6971755, emoji: "🧱", name: "Museo Nazionale della Montagna CAI Torino", description: "" },
+      { lat: 44.4032997, lon: 8.9369203, emoji: "🧱", name: "Archivio di Stato - Genova", description: "" },
+      { lat: 45.4271079, lon: 12.3210835, emoji: "🧱", name: "Spazio Punch", description: "" },
+      { lat: 45.0912239, lon: 7.6899521, emoji: "🧱", name: "Via Baltea", description: "" },
+
+      // 🪞 Infrastrutture
+      { lat: 45.5461679, lon: 9.0371097, emoji: "🪞", name: "Audiofficina - HI-FI Corner", description: "" },
+      { lat: 44.4223391, lon: 8.9343396, emoji: "🪞", name: "Funicolare Zecca-Righi", description: "" },
+      { lat: 44.4306143, lon: 8.7936508, emoji: "🪞", name: "Le Lavatrici", description: "" },
+      { lat: 50.8369635, lon: 4.3475601, emoji: "🪞", name: "GIMIC Radio", description: "" },
+      { lat: 51.9110306, lon: 4.4057923, emoji: "🪞", name: "Sodafabriek", description: "" },
+
+      // 🪨 Pietre (rocce, sentieri montagna)
+      { lat: 45.0579795, lon: 7.4453263, emoji: "🪨", name: "Rocca Sgaroira", description: "" },
+      { lat: 45.0640106, lon: 7.4023236, emoji: "🪨", name: "Pera Luvera", description: "" },
+      { lat: 45.0455501, lon: 7.4147338, emoji: "🪨", name: "Sentiero Pietra di Salomone", description: "" },
+
+      // 💧 Acque (terme, laghi, piscine)
+      { lat: 50.5876769, lon: 5.9695457, emoji: "💧", name: "Lake Gileppe", description: "" },
+      { lat: 50.4942814, lon: 5.8640616, emoji: "💧", name: "Thermes de Spa", description: "" },
+      { lat: 52.392472, lon: 4.868347, emoji: "💧", name: "Brediusbad Outdoor Pool", description: "" },
+
+      // 🌫️ Margini (luoghi strani, ai margini)
+      { lat: 51.9293395, lon: 4.4786731, emoji: "🌫️", name: "weggeefwinkel", description: "" },
+      { lat: 50.433611, lon: 5.905556, emoji: "🌫️", name: "Mont des Brumes", description: "" },
+      { lat: 45.6783766, lon: 9.6597744, emoji: "🌫️", name: "gres art 671", description: "" },
+      { lat: 51.8310305, lon: 21.3984269, emoji: "🌫️", name: "Ośrodek ŚWIT Wilga", description: "" },
+      { lat: 51.823961, lon: 21.3948671, emoji: "🌫️", name: "Obiady Stoczek", description: "" },
+      { lat: 54.027122, lon: 17.92425, emoji: "🌫️", name: "Ośrodek Pracy Twórczej IBW PAN nad jeziorem Wdzydze", description: "" },
+      { lat: 52.5443895, lon: 19.5617243, emoji: "🌫️", name: "Almatur. Resorts", description: "" },
+      { lat: 44.4496767, lon: 26.1294586, emoji: "🌫️", name: "Zissou Obor", description: "" },
+      { lat: 44.4387162, lon: 26.0882891, emoji: "🌫️", name: "Zona libera Cismigiu", description: "" },
+      { lat: 52.394413, lon: 4.8826317, emoji: "🌫️", name: "Het Eikenhout", description: "" },
+      { lat: 52.3831532, lon: 4.8433834, emoji: "🌫️", name: "AGA LAB", description: "" },
+      { lat: 52.390787, lon: 4.8504312, emoji: "🌫️", name: "ISOamsterdam", description: "" },
+      { lat: 51.9842777, lon: 4.3775965, emoji: "🌫️", name: "Stichting Kringloopbedrijf Delft", description: "" },
+      { lat: 52.3833861, lon: 4.929058, emoji: "🌫️", name: "FC Hyena", description: "" },
+      { lat: 50.8318921, lon: 4.3221623, emoji: "🌫️", name: "La Fabriek", description: "" },
+      { lat: 51.9527997, lon: 4.4068379, emoji: "🌫️", name: "De Tempel estate", description: "" },
+      { lat: 51.8922335, lon: 4.4691409, emoji: "🌫️", name: "Varia", description: "" },
+      { lat: 45.7535559, lon: 8.5624223, emoji: "🌫️", name: "No Work Team Srl", description: "" },
+      { lat: 44.409822, lon: 8.9292696, emoji: "🌫️", name: "Lucarda", description: "" },
+
+      // 🫘 Indizi-fagioli (negozi, posti curiosi)
+      { lat: 51.9131845, lon: 4.4608517, emoji: "🫘", name: "Ekoplaza Nieuwe Binnenweg - biologische supermarkt", description: "" },
+      { lat: 45.4955863, lon: 9.2282447, emoji: "🫘", name: "Bocciofila Caccialanza", description: "" },
+      { lat: 44.4086629, lon: 8.9323392, emoji: "🫘", name: "TUG STORE", description: "" },
+      { lat: 44.4086586, lon: 8.931893, emoji: "🫘", name: "Pescetto Abbigliamento", description: "" },
+      { lat: 51.9207255, lon: 4.4698885, emoji: "🫘", name: "De Kade", description: "" },
+      { lat: 51.9397322, lon: 4.4215656, emoji: "🫘", name: "In den berkebrom", description: "" },
+
+      // 🫧 Scorciatoie / vie
+      { lat: 45.4780045, lon: 9.2181562, emoji: "🫧", name: "Via Vincenzo Vela, 8", description: "" },
+      { lat: 45.0690546, lon: 7.685454, emoji: "🫧", name: "Via Accademia delle Scienze, 5", description: "" },
+      { lat: 45.0800875, lon: 7.68387, emoji: "🫧", name: "Via Borgo Dora", description: "" },
+
+      // 📍 Dropped pins / coordinate (non categorizzabili)
+      { lat: 46.1658986, lon: 8.7917834, emoji: "📍", name: "La Rada", description: "" },
+      { lat: 44.2216059, lon: 12.0531801, emoji: "📍", name: "Dropped pin", description: "" },
+      { lat: 44.2216888, lon: 12.0506714, emoji: "📍", name: "Chiesa Cattolica San Giovanni Battista in Vico Cappuccinini", description: "" },
+      { lat: 49.0116944, lon: 14.715, emoji: "📍", name: "49°00'42.1\"N 14°42'54.0\"E", description: "" },
+      { lat: 44.4438664, lon: 26.0942338, emoji: "📍", name: "Dropped pin", description: "" },
+      { lat: 44.4465, lon: 26.1274444, emoji: "📍", name: "44°26'47.4\"N 26°07'38.8\"E", description: "" },
+      { lat: 52.3851334, lon: 4.8812888, emoji: "📍", name: "Dropped pin", description: "" },
+      { lat: 45.001741, lon: 9.946915, emoji: "📍", name: "45°00'06.3\"N 9°56'48.9\"E", description: "" },
+      { lat: 44.987442, lon: 10.000888, emoji: "📍", name: "44°59'14.8\"N 10°00'03.2\"E", description: "" },
+      { lat: 44.4079718, lon: 8.92928, emoji: "📍", name: "Dropped pin Genova", description: "" },
+    ];
+
+const emojiLayers = {};
+    const emojiMarkers = {};
+    const filterDiv = document.getElementById('filter');
+    const detailView = document.getElementById('detail-view');
+    const detailContent = document.getElementById('detail-content');
+    const mapEl = document.getElementById('map');
+
+    const uniqueEmojis = [...new Set(points.map(p => p.emoji))];
+    let activeFilter = null; // null = tutti visibili, altrimenti = emoji selezionato
+
+    // Crea bottone "mostra tutti"
+    const showAllBtn = document.createElement('button');
+    showAllBtn.innerText = '🔄';
+    showAllBtn.className = 'filter-btn';
+    showAllBtn.style.opacity = '50%';
+    showAllBtn.title = 'Mostra tutti';
+    showAllBtn.addEventListener('click', () => {
+      activeFilter = null;
+      uniqueEmojis.forEach(emoji => {
+        map.addLayer(emojiLayers[emoji]);
+      });
+      updateFilterButtons();
+    });
+    filterDiv.appendChild(showAllBtn);
+
+    function updateFilterButtons() {
+      document.querySelectorAll('.filter-btn[data-emoji]').forEach(btn => {
+        if (activeFilter === null) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.toggle('active', btn.dataset.emoji === activeFilter);
+        }
+      });
+      // Mostra/nascondi bottone reset
+      showAllBtn.style.opacity = activeFilter === null ? '50%' : '100%';
+    }
+
+    uniqueEmojis.forEach(emoji => {
+      emojiLayers[emoji] = L.layerGroup().addTo(map);
+      emojiMarkers[emoji] = [];
+
+      const btn = document.createElement('button');
+      btn.innerText = emoji;
+      btn.className = 'filter-btn active';
+      btn.dataset.emoji = emoji;
+      btn.addEventListener('click', () => {
+        if (activeFilter === emoji) {
+          // Se clicchi di nuovo sullo stesso, torna a mostrare tutti
+          activeFilter = null;
+          uniqueEmojis.forEach(e => map.addLayer(emojiLayers[e]));
+        } else {
+          // Mostra solo questo
+          activeFilter = emoji;
+          uniqueEmojis.forEach(e => {
+            if (e === emoji) {
+              map.addLayer(emojiLayers[e]);
+            } else {
+              map.removeLayer(emojiLayers[e]);
+            }
+          });
+        }
+        updateFilterButtons();
+      });
+      filterDiv.appendChild(btn);
+    });
+
+    // Function to open detail panel
+    function openDetail(point) {
+      const categoryName = categoryNames[point.emoji] || point.emoji;
+      
+      detailContent.innerHTML = `
+        <div class="detail-header">
+          <div class="detail-emoji">${point.emoji}</div>
+          <div class="detail-name">${point.name}</div>
+          <div class="detail-category">${categoryName}</div>
+          <div class="detail-coords">${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}</div>
+        </div>
+        <div class="detail-description">
+          <p>${point.description}</p>
+        </div>
+      `;
+      
+      detailView.classList.add('open');
+      mapEl.classList.add('panel-open');
+      filterDiv.classList.add('panel-open');
+    }
+
+    // Function to close detail panel
+    function closeDetail() {
+      detailView.classList.remove('open');
+      mapEl.classList.remove('panel-open');
+      filterDiv.classList.remove('panel-open');
+    }
+
+    // Create markers
+    points.forEach((point) => {
+      const { lat, lon, name, emoji } = point;
+      
+      const emojiIcon = L.divIcon({
+        className: 'note-label',
+        html: `<div style="font-size: 7em;">${emoji}</div>`,
+        iconSize: [20, 20],
+      });
+
+      const marker = L.marker([lat, lon], { 
+        icon: emojiIcon,
+        autoPan: false
+      });
+      
+      // Click to open detail panel
+      marker.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        L.DomEvent.preventDefault(e);
+        e.originalEvent.stopPropagation();
+        e.originalEvent.preventDefault();
+        openDetail(point);
+      });
+
+      marker.addTo(emojiLayers[emoji]);
+      emojiMarkers[emoji].push(marker);
+    });
+
+    // Close button
+    document.getElementById('detail-close').addEventListener('click', closeDetail);
+
+    // ESC key to close
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeDetail();
+      }
+    });
+
+
+    // Zoom-based resizing
+    map.on('zoomend', () => {
+      const zoom = map.getZoom();
+      const scale = Math.max(0.6, Math.min(1.5, zoom / 14));
+      document.querySelectorAll('.note-label').forEach(label => {
+        label.style.fontSize = `${scale}em`;
+      });
+    });
+
+    // Reset view on click
+    document.getElementById('text').addEventListener('click', () => {
+      map.flyTo(defaultCenter, defaultZoom);
+      closeDetail();
+    });
+  </script>
+</body>
+</html>
