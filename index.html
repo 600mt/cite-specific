@@ -7,7 +7,8 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
   <style>
-    /* One text size and style for everything on the page: notes and menu */
+    /* Typeface and glow shared by the notes and the menu.
+       The menu stays at --text-size; notes scale with zoom (NOTE_SIZE_* in the script). */
     :root {
       --text-size: 13px;
       --text-font: 'Arial Narrow', sans-serif;
@@ -19,35 +20,58 @@
     #map { width: 100%; height: 100%; background: #f2efe9; }
 
     /* ── Notes on the map ─────────────────────────────────────── */
-    .note-label {
-      background: transparent;
+    .note-type {
       font-family: var(--text-font);
-      font-size: var(--text-size);
+      line-height: 1.25;              /* = LINE_HEIGHT in the script */
       color: #000;
       text-shadow: var(--text-glow);
-      line-height: 1.25;
-      max-width: 200px;
-      white-space: normal;
-      word-break: break-word;
-      text-align: left;
-      cursor: default;
-      transition: opacity 0.2s ease;
-      opacity: 1;
     }
-    .note-title { font-weight: regular; }
-    .note-desc, .note-long { display: none; }
+    .note-layer {
+      position: absolute; inset: 0;
+      pointer-events: none;
+      -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* off-screen copy used to measure each note once */
+    .note-measure {
+      position: fixed; left: -10000px; top: 0;
+      width: 4000px; height: 0;
+      visibility: hidden; pointer-events: none;
+    }
+
+    .note-label {
+      position: absolute; left: 0; top: 0;
+      pointer-events: auto;
+      white-space: normal;
+      overflow-wrap: break-word;
+      text-align: left;
+      transition: opacity 0.2s ease;
+    }
+    .note-label.align-right { text-align: right; }
+    .note-item, .note-more { max-width: 13em; }
+    .note-item.is-long { max-width: 19em; }
+    .note-label.align-right .note-item,
+    .note-label.align-right .note-more { margin-left: auto; }
+    /* space between notes in a list once they show more than a title (= ITEM_GAP_EM) */
+    .note-label.detailed .note-item + .note-item,
+    .note-label.detailed .note-more { margin-top: 0.4em; }
     .note-long { white-space: pre-line; }
 
-    /* Region level: short line under the title */
-    .zoom-mid .note-desc { display: block; }
-    /* Close up: the longer description (or the short line if there is none) */
-    .zoom-near .note-label.has-long { max-width: 280px; }
-    .zoom-near .note-long { display: block; }
-    .zoom-near .note-label:not(.has-long) .note-desc { display: block; }
+    .note-dot {
+      position: absolute; left: 0; top: 0;
+      border-radius: 50%;
+      background: #000;
+      box-shadow: 0 0 3px #e892a2, 0 0 2px #e892a2;
+      pointer-events: auto;
+    }
+    .note-dot::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; } /* easier to tap */
 
-    /* !important because MapLibre sets an inline opacity on every marker */
-    .labels-dimmed .note-label { opacity: 0.15 !important; }
-    .note-label.is-hovered { opacity: 1 !important; z-index: 1; }
+    .note-layer.can-zoom .note-item,
+    .note-more,
+    .note-dot { cursor: pointer; }
+
+    .note-layer.dimmed .note-label { opacity: 0.15; }
+    .note-layer.dimmed .note-label.is-hovered { opacity: 1; z-index: 1; }
 
     /* ── Category menu ────────────────────────────────────────── */
     .legend {
@@ -118,7 +142,7 @@
   }
 },
 
-        { id: "boundary", type: "line", source: "openmaptiles", "source-layer": "boundary", filter: ["==","admin_level",2], paint: { "line-color": COLORS.boundary, "line-width": 0.8, "line-dasharray": [4,2] } }
+        { id: "boundary", type: "line", source: "openmaptiles", "source-layer": "boundary", filter: ["==","admin_level",2], paint: { "line-color": COLORS.boundary, "line-width": 1.2, "line-dasharray": [4,2] } }
       ]
     };
 
@@ -131,20 +155,36 @@
       attributionControl: false
     });
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
-    map.on('load', () => {
-      const attrib = document.querySelector('.maplibregl-ctrl-attrib');
-      if (attrib) attrib.classList.add('maplibregl-compact');
-    });
 
     // =========================================================================
-    // 🔎  WHAT EACH NOTE SHOWS, BY ZOOM
-    //     below SHORT_MIN_ZOOM: title only
-    //     from SHORT_MIN_ZOOM:  title + short line (`text`)
-    //     from LONG_MIN_ZOOM:   title + longer description (`long`)
+    // 🔠  NOTES: SIZE, DETAIL AND SPACING
+    //     Text grows a little as you zoom in. How much a note shows depends on
+    //     the zoom AND on the room around it: if the longer text would run off
+    //     the screen or cover another note, it shows less. Notes that sit close
+    //     together become one list; anything that still has no room waits as a
+    //     point until you zoom in (click a point, a title or "+ N more" to zoom).
     // =========================================================================
-    const SHORT_MIN_ZOOM = 5;    // roughly region level
-    const LONG_MIN_ZOOM  = 14;   // roughly street level
-    const STACK_GAP_PX   = 3;    // space between notes that would otherwise overlap
+    const NOTE_SIZE_FAR   = 15;      // text size (px) with the whole of Europe in view
+    const NOTE_SIZE_NEAR  = 19;      // text size (px) at street level
+    const ZOOM_FAR        = 4;
+    const ZOOM_NEAR       = 14;
+    const SIZE_PER_WIDTH  = 1 / 24;  // on narrow screens, text size ≤ screen width × this
+
+    const SHORT_MIN_ZOOM  = 5;       // from here a note may show its short line (`text`)
+    const LONG_MIN_ZOOM   = 14;      // from here it may show the longer description (`long`)
+
+    const GROUP_RADIUS_EM = 3;       // notes closer than this (× text size) are listed together
+    const GROUP_MAX_LINES = 6;       // longest list before "+ N more" (no limit from LONG_MIN_ZOOM)
+    const EDGE_PX         = 10;      // space kept free along the screen edges
+    const GAP_PX          = 4;       // space kept between two notes
+    const DOT_PX          = 5;       // the point marking where a note is (0 = no points)
+    const DOT_GAP_EM      = 0.45;    // space between the point and its text
+
+    const moreText = n => '+ ' + n + ' more';
+    const allText  = n => n + ' notes';
+
+    const LINE_HEIGHT = 1.25;        // = line-height of .note-type
+    const ITEM_GAP_EM = 0.4;         // = margin between notes in a detailed list
 
     // =========================================================================
     // 🗂  CATEGORIES (from map-notes.js)
@@ -162,64 +202,361 @@
     // 📍  NOTES
     // =========================================================================
     const mapEl = document.getElementById('map');
-    const notes = [];   // { data, cat, el, marker }
 
-    function addLine(el, className, text) {
+    const layer = document.createElement('div');
+    layer.className = 'note-type note-layer';
+    map.getCanvasContainer().appendChild(layer);   // inside the map, so dragging over a note still pans
+
+    const measurer = document.createElement('div');
+    measurer.className = 'note-type note-measure';
+    measurer.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(measurer);
+
+    const insetProbe = document.createElement('div');   // reads the phone's notch / home-bar insets
+    insetProbe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:' +
+      'env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+    document.body.appendChild(insetProbe);
+
+    if (!window.MAP_NOTES) console.warn('map-notes.js not found or empty');
+
+    const notes = [];   // { id, order, data, cat, m: sizes per level, dot }
+    (window.MAP_NOTES || []).forEach((data, order) => {
+      if (typeof data.lat !== 'number' || typeof data.lon !== 'number') return;
+      const n = { id: notes.length, order, data, cat: categoryOf(data), m: null, dot: null, dotOn: false };
+      if (DOT_PX) {
+        n.dot = document.createElement('div');
+        n.dot.className = 'note-dot';
+        n.dot.style.cssText = `width:${DOT_PX}px;height:${DOT_PX}px;display:none`;
+        n.dot.note = n;
+        layer.appendChild(n.dot);
+      }
+      notes.push(n);
+    });
+    // Who gets room first: an optional `priority` (higher first), then the order in map-notes.js
+    notes.sort((a, b) => (b.data.priority || 0) - (a.data.priority || 0) || a.order - b.order);
+
+    // Detail levels: 0 title · 1 title + short line · 2 title + longer description
+    function contentLevel(d, level) {
+      if (level >= 2 && d.long) return 2;
+      if (level >= 1 && d.text) return 1;
+      return 0;
+    }
+
+    function addLine(parent, className, text) {
       const div = document.createElement('div');
       div.className = className;
       div.textContent = text;
-      el.appendChild(div);
+      parent.appendChild(div);
+      return div;
     }
 
-    function showNote(n) {
-      const el = document.createElement('div');
-      el.className = 'note-label';
-      addLine(el, 'note-title', n.title || '');
-      if (n.text) addLine(el, 'note-desc', n.text);
-      if (n.long) { addLine(el, 'note-long', n.long); el.classList.add('has-long'); }
-
-      el.addEventListener('mouseenter', () => { mapEl.classList.add('labels-dimmed'); el.classList.add('is-hovered'); });
-      el.addEventListener('mouseleave', () => { mapEl.classList.remove('labels-dimmed'); el.classList.remove('is-hovered'); });
-
-      const marker = new maplibregl.Marker({ element: el, anchor: 'left' })
-        .setLngLat([n.lon, n.lat]).addTo(map);
-      notes.push({ data: n, cat: categoryOf(n), el, marker });
+    function buildItem(n, level) {
+      const lv = contentLevel(n.data, level);
+      const item = document.createElement('div');
+      item.className = 'note-item' + (lv === 2 ? ' is-long' : '');
+      item.note = n;
+      addLine(item, 'note-title', n.data.title || '');
+      if (lv === 1) addLine(item, 'note-desc', n.data.text);
+      if (lv === 2) addLine(item, 'note-long', n.data.long);
+      return item;
     }
 
-    // Notes that would overlap on screen (e.g. several items in one city when
-    // zoomed out) are stacked downwards from the northernmost one. As you zoom
-    // in they spread apart and settle back on their own locations.
-    function declutter() {
-      const items = notes.filter(n => n.cat.visible).map(n => {
-        const p = map.project([n.data.lon, n.data.lat]);
-        return { n, x: p.x, y: p.y, w: n.el.offsetWidth, h: n.el.offsetHeight };
-      }).sort((a, b) => a.y - b.y || a.x - b.x);
+    // ── Measure every note once, at every level, in em ──────────────────────
+    // Widths are in em and wrap at em widths, so one measurement holds at any text size.
+    const REF_PX = 20;
+    const lineSizes = new Map();   // "+ N more" / "N notes" → size
+    let measured = false;
 
-      const placed = [];
-      for (const it of items) {
-        const left = it.x, right = it.x + it.w;   // labels start at their point
-        const home = it.y - it.h / 2;
-        let top = home;
-        for (let moved = true; moved; ) {
-          moved = false;
-          for (const o of placed) {
-            if (left < o.right && right > o.left &&
-                top < o.bottom + STACK_GAP_PX && top + it.h > o.top - STACK_GAP_PX) {
-              top = o.bottom + STACK_GAP_PX;
-              moved = true;
-            }
-          }
+    function measureAll() {
+      measurer.style.fontSize = REF_PX + 'px';
+      measurer.textContent = '';
+      const jobs = [];
+      const wrap = child => {
+        const w = document.createElement('div');
+        w.className = 'note-label';
+        w.appendChild(child);
+        measurer.appendChild(w);
+        return w;
+      };
+      for (const n of notes) {
+        n.m = [];
+        for (let L = 0; L <= 2; L++)
+          if (contentLevel(n.data, L) === L) jobs.push([n.m, L, wrap(buildItem(n, L))]);
+      }
+      for (let c = 1; c <= notes.length; c++) {
+        for (const text of [moreText(c), allText(c)]) {
+          const d = document.createElement('div');
+          d.className = 'note-more';
+          d.textContent = text;
+          jobs.push([lineSizes, text, wrap(d)]);
         }
-        placed.push({ left, right, top, bottom: top + it.h });
-        it.n.marker.setOffset([0, top - home]);
+      }
+      for (const [target, key, el] of jobs) {
+        const r = el.getBoundingClientRect();
+        const size = { w: r.width / REF_PX, h: r.height / REF_PX };
+        if (target instanceof Map) target.set(key, size); else target[key] = size;
+      }
+      for (const n of notes) { n.m[1] = n.m[1] || n.m[0]; n.m[2] = n.m[2] || n.m[1]; }
+      measurer.textContent = '';
+      measured = true;
+    }
+    const lineSize = text => lineSizes.get(text) || { w: 4, h: LINE_HEIGHT };
+
+    // ── Things notes must not cover: the menu, the attribution, phone insets ─
+    let fixedBoxes = [], insets = { t: 0, r: 0, b: 0, l: 0 }, fixedDirty = true;
+    function measureFixed() {
+      fixedDirty = false;
+      const base = mapEl.getBoundingClientRect();
+      fixedBoxes = [];
+      for (const node of document.querySelectorAll('#legend, .maplibregl-ctrl-attrib')) {
+        const r = node.getBoundingClientRect();
+        if (r.width && r.height)
+          fixedBoxes.push({ l: r.left - base.left, t: r.top - base.top, r: r.right - base.left, b: r.bottom - base.top });
+      }
+      const cs = getComputedStyle(insetProbe);
+      insets = {
+        t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0,
+        b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0,
+      };
+    }
+
+    function noteSize(zoom, width) {
+      const t = Math.max(0, Math.min(1, (zoom - ZOOM_FAR) / (ZOOM_NEAR - ZOOM_FAR)));
+      const size = NOTE_SIZE_FAR + t * (NOTE_SIZE_NEAR - NOTE_SIZE_FAR);
+      return Math.round(Math.min(size, width * SIZE_PER_WIDTH) * 4) / 4;
+    }
+
+    function showDot(n, p) {
+      if (!n.dot) return;
+      if (p) {
+        if (!n.dotOn) { n.dot.style.display = ''; n.dotOn = true; }
+        n.dot.style.transform = `translate(${Math.round(p.x - DOT_PX / 2)}px, ${Math.round(p.y - DOT_PX / 2)}px)`;
+      } else if (n.dotOn) {
+        n.dot.style.display = 'none'; n.dotOn = false;
       }
     }
 
-    function relayout() {
+    // =========================================================================
+    // 🧩  LAYOUT: runs on every map move
+    //     1. find which notes are on screen
+    //     2. list notes that sit close together as one group
+    //     3. most important first, give each group the richest text that fits,
+    //        on the first side of its point where it stays on screen, clear of
+    //        the notes already placed and of every other point
+    // =========================================================================
+    const SIDES = ['right', 'left', 'right-up', 'left-up', 'right-mid', 'left-mid', 'below', 'above'];
+    const CELL = 64;   // grid used to find nearby points quickly
+    const cellKey = (cx, cy) => cx * 4096 + cy;
+    let shown = new Map();   // group key → label on screen
+    let lastSize = 0;
+    let canHover = window.matchMedia('(hover: hover)').matches;
+
+    function layout() {
+      if (!measured) return;
+      const W = mapEl.clientWidth, H = mapEl.clientHeight;
       const zoom = map.getZoom();
-      mapEl.classList.toggle('zoom-mid',  zoom >= SHORT_MIN_ZOOM && zoom < LONG_MIN_ZOOM);
-      mapEl.classList.toggle('zoom-near', zoom >= LONG_MIN_ZOOM);
-      declutter();
+      const size = noteSize(zoom, W);
+      if (size !== lastSize) { layer.style.fontSize = size + 'px'; lastSize = size; }
+      layer.classList.toggle('can-zoom', zoom < LONG_MIN_ZOOM);
+      if (fixedDirty) measureFixed();
+
+      const ctx = {
+        size,
+        lh: LINE_HEIGHT * size,
+        dotGap: DOT_GAP_EM * size + DOT_PX / 2,
+        maxLevel: zoom >= LONG_MIN_ZOOM ? 2 : zoom >= SHORT_MIN_ZOOM ? 1 : 0,
+        maxLines: zoom >= LONG_MIN_ZOOM ? Infinity : GROUP_MAX_LINES,
+        view: { l: EDGE_PX + insets.l, t: EDGE_PX + insets.t, r: W - EDGE_PX - insets.r, b: H - EDGE_PX - insets.b },
+        boxes: fixedBoxes.slice(),
+        grid: new Map(),
+      };
+
+      // 1. on screen
+      const pts = [];
+      for (const n of notes) {
+        let p = null;
+        if (n.cat.visible) {
+          const q = map.project([n.data.lon, n.data.lat]);
+          if (q.x >= 0 && q.x <= W && q.y >= 0 && q.y <= H) p = q;
+        }
+        showDot(n, p);
+        if (!p) continue;
+        const pt = { n, x: p.x, y: p.y, group: null };
+        pts.push(pt);
+        const key = cellKey(Math.floor(p.x / CELL), Math.floor(p.y / CELL));
+        const cell = ctx.grid.get(key);
+        if (cell) cell.push(pt); else ctx.grid.set(key, [pt]);
+      }
+
+      // 2. groups: each note collects the less important ones within reach
+      const r2 = (GROUP_RADIUS_EM * size) ** 2;
+      const groups = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i];
+        if (a.group) continue;
+        const g = { members: [a] };
+        a.group = g;
+        for (let j = i + 1; j < pts.length; j++) {
+          const b = pts[j];
+          if (!b.group && (b.x - a.x) ** 2 + (b.y - a.y) ** 2 <= r2) { b.group = g; g.members.push(b); }
+        }
+        groups.push(g);
+      }
+
+      // 3. place
+      const next = new Map();
+      for (const g of groups) {
+        const pl = placeGroup(g, ctx);
+        if (!pl) continue;
+        ctx.boxes.push(pl.box);
+        next.set(pl.key, drawLabel(g, pl));
+      }
+      for (const [key, label] of shown) if (!next.has(key)) removeLabel(label);
+      shown = next;
+    }
+
+    function placeGroup(g, ctx) {
+      const ms = g.members;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const m of ms) {
+        if (m.x < x0) x0 = m.x; if (m.x > x1) x1 = m.x;
+        if (m.y < y0) y0 = m.y; if (m.y > y1) y1 = m.y;
+      }
+      const anchor = { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+      const key = ms.map(m => m.n.id).join(',');
+      const prev = shown.get(key);
+      const count = ms.length, cap = Math.min(count, ctx.maxLines);
+
+      // richest first: full detail for everyone, then titles only, then shorter lists
+      const tries = [];
+      for (let L = ctx.maxLevel; L >= 1; L--)
+        if (ms.slice(0, cap).some(m => contentLevel(m.n.data, L) === L)) tries.push([L, cap]);
+      for (let k = cap; k >= (count > 1 ? 0 : 1); k--) tries.push([0, k]);
+
+      // keep the side it had last frame, so labels don't jump around while you move
+      const sides = prev ? [prev.side, ...SIDES.filter(s => s !== prev.side)] : SIDES;
+
+      for (const [level, k] of tries) {
+        const [w, h] = labelSize(ms, level, k, ctx);
+        for (const side of sides) {
+          const box = boxAt(side, w, h, anchor, ctx);
+          if (fits(box, ctx, g)) return { key, level, k, side, box };
+        }
+      }
+      return null;   // no room: only its points show until you zoom in
+    }
+
+    function labelSize(ms, level, k, ctx) {
+      const s = ctx.size, count = ms.length;
+      if (k === 0) { const m = lineSize(allText(count)); return [Math.ceil(m.w * s) + 1, Math.ceil(m.h * s) + 1]; }
+      const gap = level > 0 ? ITEM_GAP_EM : 0;
+      let w = 0, h = 0;
+      for (let i = 0; i < k; i++) { const m = ms[i].n.m[level]; if (m.w > w) w = m.w; h += m.h; }
+      h += (k - 1) * gap;
+      if (k < count) { const m = lineSize(moreText(count - k)); if (m.w > w) w = m.w; h += gap + m.h; }
+      return [Math.ceil(w * s) + 1, Math.ceil(h * s) + 1];
+    }
+
+    function boxAt(side, w, h, a, ctx) {
+      const d = ctx.dotGap, half = ctx.lh / 2;
+      let l, t;
+      switch (side) {
+        case 'right':     l = a.x1 + d;     t = a.cy - half;     break;   // first line level with the point
+        case 'left':      l = a.x0 - d - w; t = a.cy - half;     break;
+        case 'right-up':  l = a.x1 + d;     t = a.cy + half - h; break;   // last line level with the point
+        case 'left-up':   l = a.x0 - d - w; t = a.cy + half - h; break;
+        case 'right-mid': l = a.x1 + d;     t = a.cy - h / 2;    break;
+        case 'left-mid':  l = a.x0 - d - w; t = a.cy - h / 2;    break;
+        default: {        // below / above, slid sideways to stay on screen
+          const v = ctx.view;
+          l = Math.max(v.l, Math.min(v.r - w, a.cx - w / 2));
+          t = side === 'below' ? a.y1 + d : a.y0 - d - h;
+        }
+      }
+      return { l, t, r: l + w, b: t + h };
+    }
+
+    function fits(b, ctx, group) {
+      const v = ctx.view;
+      if (b.l < v.l || b.t < v.t || b.r > v.r || b.b > v.b) return false;
+      for (const o of ctx.boxes)
+        if (b.l < o.r + GAP_PX && b.r + GAP_PX > o.l && b.t < o.b + GAP_PX && b.b + GAP_PX > o.t) return false;
+      {   // don't cover other notes' points
+        const pad = DOT_PX / 2 + 1;
+        const cx0 = Math.max(0, Math.floor((b.l - pad) / CELL)), cx1 = Math.floor((b.r + pad) / CELL);
+        const cy0 = Math.max(0, Math.floor((b.t - pad) / CELL)), cy1 = Math.floor((b.b + pad) / CELL);
+        for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) {
+          const cell = ctx.grid.get(cellKey(cx, cy));
+          if (cell) for (const p of cell)
+            if (p.group !== group && p.x > b.l - pad && p.x < b.r + pad && p.y > b.t - pad && p.y < b.b + pad) return false;
+        }
+      }
+      return true;
+    }
+
+    function drawLabel(g, pl) {
+      let label = shown.get(pl.key);
+      if (!label) {
+        const el = document.createElement('div');
+        el.className = 'note-label';
+        label = { el, notes: g.members.map(m => m.n), level: -1, k: -1, side: '' };
+        el.label = label;
+        if (canHover) {
+          el.addEventListener('mouseenter', () => { layer.classList.add('dimmed'); el.classList.add('is-hovered'); });
+          el.addEventListener('mouseleave', () => { layer.classList.remove('dimmed'); el.classList.remove('is-hovered'); });
+        }
+        layer.appendChild(el);
+      }
+      if (label.level !== pl.level || label.k !== pl.k) fillLabel(label, pl.level, pl.k);
+      if (label.side !== pl.side) {
+        label.side = pl.side;
+        label.el.classList.toggle('align-right', pl.side.startsWith('left'));
+      }
+      label.el.style.transform = `translate(${Math.round(pl.box.l)}px, ${Math.round(pl.box.t)}px)`;
+      return label;
+    }
+
+    function fillLabel(label, level, k) {
+      const el = label.el, count = label.notes.length;
+      el.textContent = '';
+      el.classList.toggle('detailed', level > 0);
+      if (k === 0) addLine(el, 'note-more', allText(count));
+      for (let i = 0; i < k; i++) el.appendChild(buildItem(label.notes[i], level));
+      if (k > 0 && k < count) addLine(el, 'note-more', moreText(count - k));
+      label.level = level; label.k = k;
+    }
+
+    function removeLabel(label) {
+      if (label.el.classList.contains('is-hovered')) layer.classList.remove('dimmed');
+      label.el.remove();
+    }
+
+    // =========================================================================
+    // 👆  CLICK A POINT OR TITLE TO ZOOM IN ON IT, "+ N more" TO OPEN THE GROUP
+    // =========================================================================
+    let pressAt = null;
+    layer.addEventListener('pointerdown', e => { pressAt = [e.clientX, e.clientY]; });
+    layer.addEventListener('click', e => {
+      if (pressAt && Math.hypot(e.clientX - pressAt[0], e.clientY - pressAt[1]) > 6) return;   // was a drag
+      const dot = e.target.closest('.note-dot');
+      const item = e.target.closest('.note-item');
+      const more = e.target.closest('.note-more');
+      if (dot) zoomInOn([dot.note]);
+      else if (item) zoomInOn([item.note]);
+      else if (more) zoomInOn(more.closest('.note-label').label.notes);
+    });
+
+    function zoomInOn(list) {
+      const zoom = map.getZoom();
+      if (list.length === 1) {
+        if (zoom >= LONG_MIN_ZOOM) return;
+        map.easeTo({ center: [list[0].data.lon, list[0].data.lat], zoom: Math.min(LONG_MIN_ZOOM, zoom + 3) });
+        return;
+      }
+      const bounds = new maplibregl.LngLatBounds();
+      list.forEach(n => bounds.extend([n.data.lon, n.data.lat]));
+      const pad = Math.min(120, mapEl.clientWidth / 5, mapEl.clientHeight / 5);
+      map.fitBounds(bounds, { padding: pad, maxZoom: 19 });
     }
 
     // =========================================================================
@@ -237,8 +574,7 @@
         box.checked = cat.visible;
         box.addEventListener('change', () => {
           cat.visible = box.checked;
-          for (const n of notes) if (n.cat === cat) n.el.style.display = cat.visible ? '' : 'none';
-          relayout();
+          layout();
         });
 
         const name = document.createElement('span');
@@ -254,19 +590,27 @@
     }
 
     // =========================================================================
-    // 📥  LOAD the notes from map-notes.js
+    // 📥  START
     // =========================================================================
-    if (!window.MAP_NOTES) console.warn('map-notes.js not found or empty');
-    (window.MAP_NOTES || [])
-      .filter(n => typeof n.lat === 'number' && typeof n.lon === 'number')
-      .forEach(showNote);
-
     buildLegend();
-    relayout();
-    map.on('zoom', relayout);
-    map.on('rotate', relayout);
-    map.on('pitch', relayout);
-    if (document.fonts) document.fonts.ready.then(relayout);
+    measureAll();
+    layout();
+
+    map.on('move', layout);
+    map.on('resize', () => { fixedDirty = true; layout(); });
+    map.on('load', () => {
+      const attrib = document.querySelector('.maplibregl-ctrl-attrib');
+      if (attrib) attrib.classList.add('maplibregl-compact');
+      fixedDirty = true;
+      layout();
+    });
+    // the attribution opens and closes when clicked: keep notes clear of it
+    document.addEventListener('click', e => {
+      if (e.target.closest && e.target.closest('.maplibregl-ctrl-attrib'))
+        requestAnimationFrame(() => { fixedDirty = true; layout(); });
+    });
+    window.matchMedia('(hover: hover)').addEventListener?.('change', e => { canHover = e.matches; });
+    if (document.fonts) document.fonts.ready.then(() => { measureAll(); layout(); });
   </script>
 </body>
 </html>
