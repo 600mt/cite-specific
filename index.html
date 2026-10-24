@@ -26,10 +26,17 @@ body{
   justify-content:space-between;
   padding:16px;
 }
+a,
+a:visited,
+a:active{
+  color:inherit;
+  text-decoration:underline;
+}
 p,ul{margin:0}
 .bio{max-width:none}
 .contact{font-size:16px;text-align:center}
 .cat{font-family:Arial,Helvetica,sans-serif;font-size:calc(1em - 0.5pt);opacity:0.5}
+.cat .name-letter{font-family:"Times New Roman",Times,serif}
 .name-letter{display:inline-block;transform:rotate(var(--rotation))}
 @media (min-width:768px){.bio{font-size:2em;line-height:1.15}}
 </style>
@@ -39,9 +46,9 @@ p,ul{margin:0}
   <p class="contact">For inquiries and portfolio write to <a href="mailto:mte.bettini@gmail.com">mte.bettini@gmail.com</a></p>
   <div class="clients">
     <p class="cat">Clients:</p>
-    <p><span class="cat">International organizations:</span> United Nations Satellite Center, UNOSAT, Human Rights Watch</p>
-    <p><span class="cat">Design studios:</span> Studio Folder(IT), DotDotDot (IT), Non-Linear (CH) </p>
-    <p><span class="cat">Universities:</span> Design Academy Eindhoven (NL), University of Amsterdam (NL), Politecnico di Milano (IT), Politecnico di Torino (IT), Università di Pisa (IT), Sheffield University (UK)</p>
+    <p><span class="cat">International organizations:</span> <a href="https://www.unosat.org/" target="_blank" rel="noreferrer noopener">United Nations Satellite Center</a>, <a href="https://www.unosat.org/" target="_blank" rel="noreferrer noopener">UNOSAT</a>, <a href="https://www.hrw.org/" target="_blank" rel="noreferrer noopener">Human Rights Watch</a></p>
+    <p><span class="cat">Design studios:</span> <a href="https://www.studiofolder.it/" target="_blank" rel="noreferrer noopener">Studio Folder</a> (IT), <a href="https://dotdotdot.it/" target="_blank" rel="noreferrer noopener">DotDotDot</a> (IT), <a href="https://www.non-linear.ch/" target="_blank" rel="noreferrer noopener">Non-Linear</a> (CH)</p>
+    <p><span class="cat">Universities:</span> <a href="https://www.designacademy.nl/" target="_blank" rel="noreferrer noopener">Design Academy Eindhoven</a> (NL), <a href="https://www.uva.nl/" target="_blank" rel="noreferrer noopener">University of Amsterdam</a> (NL), <a href="https://www.polimi.it/" target="_blank" rel="noreferrer noopener">Politecnico di Milano</a> (IT), <a href="https://www.polito.it/" target="_blank" rel="noreferrer noopener">Politecnico di Torino</a> (IT), <a href="https://www.unipi.it/" target="_blank" rel="noreferrer noopener">Università di Pisa</a> (IT), <a href="https://www.sheffield.ac.uk/" target="_blank" rel="noreferrer noopener">Sheffield University</a> (UK)</p>
   </div>
   <script>
     const textColors = [
