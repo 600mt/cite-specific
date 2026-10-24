@@ -29,13 +29,14 @@ body{
 p,ul{margin:0}
 .bio{max-width:none}
 .cat{font-family:Arial,Helvetica,sans-serif;font-size:calc(1em - 0.5pt);opacity:0.5}
+.name-letter{display:inline-block;transform:rotate(var(--rotation))}
 @media (min-width:768px){.bio{font-size:2em;line-height:1.15}}
 </style>
 </head>
 <body>
-  <p class="bio"><span class="cat">Matteo Bettini</span> is an information designer and visual artist based in the Netherlands, trained in graphic design and typography. His mapping and information design practice explores what lies between the map and the territory: perception, narrative, ambiguity and power in how places are represented. He works between the Netherlands and Italy and is part of a collective based in Milan.</p>
+  <p class="bio"><span class="cat"><span class="name-letter">M</span><span class="name-letter">a</span><span class="name-letter">t</span><span class="name-letter">t</span><span class="name-letter">e</span><span class="name-letter">o</span> <span class="name-letter">B</span><span class="name-letter">e</span><span class="name-letter">t</span><span class="name-letter">t</span><span class="name-letter">i</span><span class="name-letter">n</span><span class="name-letter">i</span></span> is an information designer and visual artist based in Rotterdam, the Netherlands. Trained in graphic design and typography, he has an enduring obsession with maps and the worlds they construct. Through visual and spatial research, he explores the tension between map and territory, questioning how we see, interpret and represent the world.</p>
   <div class="clients">
-    <p class="cat">Clients I worked for:</p>
+    <p class="cat">Clients:</p>
     <p><span class="cat">International organizations:</span> United Nations Satellite Center, UNOSAT, Human Rights Watch</p>
     <p><span class="cat">Design studios:</span> Studio Folder(IT), DotDotDot (IT), Non-Linear (CH) </p>
     <p><span class="cat">Universities:</span> Design Academy Eindhoven (NL), University of Amsterdam (NL), Politecnico di Milano (IT), Politecnico di Torino (IT), Università di Pisa (IT), Sheffield University (UK)</p>
@@ -53,6 +54,10 @@ p,ul{margin:0}
     ];
     const color = textColors[Math.floor(Math.random() * textColors.length)];
     document.documentElement.style.setProperty("--text-color", color);
+    document.querySelectorAll(".name-letter").forEach((letter) => {
+      const rotation = Math.random() * 16 - 8;
+      letter.style.setProperty("--rotation", `${rotation}deg`);
+    });
   </script>
 </body>
 </html>
