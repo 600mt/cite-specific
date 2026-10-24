@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Notes Migration Tool</title>
+  <meta charset="utf-8" />
+  <style>
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .info {
+      background: #e3f2fd;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+      border-left: 4px solid #2196F3;
+    }
+    
+    textarea {
+      width: 100%;
+      height: 200px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+    
+    button {
+      background: #333;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 100px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px 10px 0;
+    }
+    
+    button:hover {
+      background: #555;
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .progress {
+      margin: 20px 0;
+      display: none;
+    }
+    
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #f0f0f0;
+      border-radius: 15px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: #4CAF50;
+      width: 0%;
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+    
+    .status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 4px;
+      display: none;
+    }
+    
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    
+    .file-input {
+      margin: 20px 0;
+    }
+    
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    
+    .stat-card {
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    
+    .stat-number {
+      font-size: 32px;
+      font-weight: bold;
+      color: #333;
+    }
+    
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📍 Map Notes Migration Tool</h1>
+    <p>Import your notes from Supabase backup into persistent storage</p>
+    
+    <div class="info">
+      <strong>Instructions:</strong>
+      <ol>
+        <li>Paste your notes data (TSV format) in the textarea below</li>
+        <li>Click "Parse & Preview" to see what will be imported</li>
+        <li>Click "Import Notes" to save them to persistent storage</li>
+      </ol>
+    </div>
+    
+    <div class="stats" id="statsContainer" style="display: none;">
+      <div class="stat-card">
+        <div class="stat-number" id="totalNotes">0</div>
+        <div class="stat-label">Total Notes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="importedNotes">0</div>
+        <div class="stat-label">Imported</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="failedNotes">0</div>
+        <div class="stat-label">Failed</div>
+      </div>
+    </div>
+    
+    <div class="file-input">
+      <label for="notesData"><strong>Notes Data (TSV format):</strong></label>
+      <textarea id="notesData" placeholder="Paste your TSV data here...
+Format: id[TAB]lat[TAB]lon[TAB]text[TAB]created_at"></textarea>
+    </div>
+    
+    <button onclick="parseNotes()" id="parseBtn">Parse & Preview</button>
+    <button onclick="importNotes()" id="importBtn" disabled>Import Notes</button>
+    <button onclick="clearStorage()" id="clearBtn">Clear All Notes</button>
+    
+    <div class="progress" id="progressContainer">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill">0%</div>
+      </div>
+    </div>
+    
+    <div class="status" id="statusMessage"></div>
+    
+    <div id="preview" style="margin-top: 20px;"></div>
+  </div>
+
+  <script>
+    let parsedNotes = [];
+    
+    function showStatus(message, type = 'info') {
+      const statusEl = document.getElementById('statusMessage');
+      statusEl.textContent = message;
+      statusEl.className = `status ${type}`;
+      statusEl.style.display = 'block';
+    }
+    
+    function updateProgress(current, total) {
+      const progressContainer = document.getElementById('progressContainer');
+      const progressFill = document.getElementById('progressFill');
+      const percentage = Math.round((current / total) * 100);
+      
+      progressContainer.style.display = 'block';
+      progressFill.style.width = percentage + '%';
+      progressFill.textContent = `${current} / ${total} (${percentage}%)`;
+    }
+    
+    function updateStats(total, imported, failed) {
+      document.getElementById('statsContainer').style.display = 'grid';
+      document.getElementById('totalNotes').textContent = total;
+      document.getElementById('importedNotes').textContent = imported;
+      document.getElementById('failedNotes').textContent = failed;
+    }
+    
+    function parseNotes() {
+      const data = document.getElementById('notesData').value.trim();
+      if (!data) {
+        showStatus('Please paste your notes data first', 'error');
+        return;
+      }
+      
+      const lines = data.split('\n').filter(line => line.trim());
+      parsedNotes = [];
+      
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 5) {
+          const [id, lat, lon, text, created_at] = parts;
+          parsedNotes.push({
+            id,
+            lat: parseFloat(lat),
+            lon: parseFloat(lon),
+            text: text,
+            created_at
+          });
+        }
+      }
+      
+      if (parsedNotes.length === 0) {
+        showStatus('No valid notes found in the data', 'error');
+        return;
+      }
+      
+      showStatus(`Successfully parsed ${parsedNotes.length} notes!`, 'success');
+      updateStats(parsedNotes.length, 0, 0);
+      document.getElementById('importBtn').disabled = false;
+      
+      // Show preview
+      const preview = document.getElementById('preview');
+      preview.innerHTML = `
+        <h3>Preview (first 5 notes):</h3>
+        <ul>
+          ${parsedNotes.slice(0, 5).map(note => `
+            <li>
+              <strong>${note.text.substring(0, 50)}${note.text.length > 50 ? '...' : ''}</strong><br>
+              <small>Location: ${note.lat.toFixed(4)}, ${note.lon.toFixed(4)} | Created: ${note.created_at}</small>
+            </li>
+          `).join('')}
+        </ul>
+        ${parsedNotes.length > 5 ? `<p>... and ${parsedNotes.length - 5} more notes</p>` : ''}
+      `;
+    }
+    
+    async function importNotes() {
+      if (parsedNotes.length === 0) {
+        showStatus('Please parse notes first', 'error');
+        return;
+      }
+      
+      const importBtn = document.getElementById('importBtn');
+      const parseBtn = document.getElementById('parseBtn');
+      importBtn.disabled = true;
+      parseBtn.disabled = true;
+      
+      let imported = 0;
+      let failed = 0;
+      
+      showStatus(`Importing ${parsedNotes.length} notes...`, 'info');
+      
+      for (let i = 0; i < parsedNotes.length; i++) {
+        const note = parsedNotes[i];
+        
+        try {
+          const noteId = `note:${note.created_at}_${note.id}`;
+          const noteData = {
+            lat: note.lat,
+            lon: note.lon,
+            text: note.text,
+            created_at: note.created_at
+          };
+          
+          await window.storage.set(noteId, JSON.stringify(noteData));
+          imported++;
+        } catch (error) {
+          console.error(`Failed to import note ${note.id}:`, error);
+          failed++;
+        }
+        
+        // Update progress every 10 notes or at the end
+        if (i % 10 === 0 || i === parsedNotes.length - 1) {
+          updateProgress(i + 1, parsedNotes.length);
+          updateStats(parsedNotes.length, imported, failed);
+        }
+        
+        // Small delay to avoid overwhelming the storage API
+        if (i % 50 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      showStatus(
+        `Import complete! ${imported} notes imported successfully, ${failed} failed.`,
+        failed === 0 ? 'success' : 'error'
+      );
+      
+      importBtn.disabled = false;
+      parseBtn.disabled = false;
+    }
+    
+    async function clearStorage() {
+      if (!confirm('Are you sure you want to delete ALL notes from storage? This cannot be undone!')) {
+        return;
+      }
+      
+      try {
+        const result = await window.storage.list('note:');
+        if (!result || !result.keys || result.keys.length === 0) {
+          showStatus('No notes found in storage', 'info');
+          return;
+        }
+        
+        let deleted = 0;
+        for (const key of result.keys) {
+          try {
+            await window.storage.delete(key);
+            deleted++;
+          } catch (error) {
+            console.error(`Failed to delete ${key}:`, error);
+          }
+        }
+        
+        showStatus(`Cleared ${deleted} notes from storage`, 'success');
+        updateStats(0, 0, 0);
+      } catch (error) {
+        showStatus('Error clearing storage: ' + error.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>
