@@ -1,332 +1,1458 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mat-t-6</title>
-<meta name="description" content="Your Name is a photographer based in [city].">
-<style>
-  :root {
-    --text: #000;
-    --muted: #999;
-    --bg: #fff;
-    --placeholder: #eee;
+  <meta charset="UTF-8">
+  <link rel="icon" href="img/favicon.jpg" type="image/jpg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Matteo Bettini</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+    body { overflow:hidden; background:#bababa; font-family:'Times New Roman', Times, serif; }
 
-    --thumb: 160px;     /* width of each thumbnail: raise to 240px or 320px for bigger photos */
-    --col-gap: 10px;
-    --row-gap: 20px;
 
-    color-scheme: light;
-  }
+    .main-layout { display:flex; width:100vw; height:100vh; height:100dvh; }
 
-  html { background: var(--bg); }
-  html.viewing { overflow: hidden; }
+    /* the archive link, on its own: the script gives it a random tilt and
+       a random spot around the footer on every load (see ARCHIVE FLOAT) */
+    #archive-float {
+      position:fixed; left:0; top:0;
+      color:#ffffff; font-size:1.25em; line-height:1.2;
+      white-space:nowrap;
+      z-index:101; pointer-events:none;
+      visibility:hidden;   /* shown once the script has placed it */
+    }
+    #archive-float a { color:inherit; text-decoration:underline; pointer-events:all; }
 
-  body {
-    margin: 8px;
-    font-family: "Times New Roman", Times, serif;
-    font-size: 20px;
-    line-height: 1.2;
-    color: var(--text);
-    background: var(--bg);
-  }
+    .scroll-area { flex:1; position:relative; overflow:hidden; }
 
-  a { color: inherit; text-decoration: none; }
-  p { margin: 0 0 1em; }
-  strong, .intro a, footer a { font-weight: bold; }
+    .carousel-clip {
+      position:absolute;
+      top: calc(-1 * env(safe-area-inset-top, 0px));
+      bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+      left: 0;
+      right: 0;
+      overflow:hidden; touch-action:pan-y;
+    }
+    .carousel-track {
+      position:absolute;
+      top: env(safe-area-inset-top, 0px);
+      left:0; width:100%; will-change:transform;
+    }
+    .carousel-track img   { width:100%; height:auto; display:block; pointer-events:none; -webkit-user-drag:none; }
+    .carousel-track video { width:100%; height:auto; display:block; pointer-events:none; min-height:0; vertical-align:top; }
 
-  a:focus-visible, button:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
-  }
+    .image-wrapper { position:relative; width:100%; font-size:0; }
+    .image-wrapper.has-project { cursor:pointer; }
 
-  /* Series */
-  .series + .series { margin-top: 1em; }
+    .thumb-bar {
+      width:60px; height:100vh; height:100dvh; flex-shrink:0;
+      position:fixed; right:0; z-index:10;
+      overflow-y:auto; scrollbar-width:none; transition:opacity .2s;
+    }
+    body.panel-open .thumb-bar { opacity:0; pointer-events:none; }
+    .thumb-bar::-webkit-scrollbar { display:none; }
+    .thumb-item { width:100%; cursor:pointer; opacity:.5; transition:opacity .2s; }
+    .thumb-item:hover,.thumb-item.active { opacity:1; }
+    .thumb-item img { width:100%; height:auto; display:block; pointer-events:none; }
 
-  h2 {
-    font-size: inherit;
-    font-weight: normal;
-    font-style: italic;
-    margin: 0 0 2px;
-  }
+    #footer {
+      position:fixed; bottom:0px; left:5px; width:calc(100vw - 80px); 
+      transform:rotate(2deg);
+      color:#ffffff; font-size:1.25em; line-height:1.2;
+      mix-blend-mode:normal; z-index:100; pointer-events:none;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    #footer a { color:inherit; text-decoration:underline; pointer-events:all; }
 
-  .grid {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: var(--row-gap) var(--col-gap);
-  }
+    #name {
+            letter-spacing: 0.4rem;
+        }
 
-  .item { display: block; width: var(--thumb); }
-  .item img { display: block; width: 100%; height: auto; }
-  .caption { display: block; margin-top: 3px; }
-  .caption span { display: block; }
+      #name2 {
+            letter-spacing: 0.2rem;
+        }
 
-  /* Greyed-out item, as with "Sold" on the original */
-  .item.sold { color: var(--muted); }
-  .item.sold img { opacity: .45; filter: grayscale(1); }
+    #bio {
+      position:fixed; top:5px; left:2px;
+      width:calc(100vw - 80px);
+      color:#ffef3d; line-height:1.2;
+      mix-blend-mode:normal; z-index:100; pointer-events:none;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
 
-  /* Shown when a file in img/ can't be found */
-  .ph {
-    display: none;
-    aspect-ratio: 1;
-    padding: 6px;
-    box-sizing: border-box;
-    background: var(--placeholder);
-    color: var(--muted);
-    font-size: 14px;
-    word-break: break-all;
-  }
-  .item.missing img { display: none; }
-  .item.missing .ph { display: block; }
+    /* side panel — 45vw, white, black text, minimal/brutalist */
+    .side-panel {
+      position:fixed; top:0; right:0;
+      height:100vh; height:100dvh; width:0;
+      overflow:hidden; z-index:200;
+      background:#ffffff;
+    }
+    body.panel-open .side-panel { width:40vw; }
 
-  footer { margin-top: 1.5em; }
+    /* native-scroll column: text then images */
+    .side-clip {
+      position:absolute; inset:0;
+      overflow-y:scroll; overflow-x:hidden;
+      -webkit-overflow-scrolling:touch;
+      opacity:0; transition: opacity 0.2s ease;
+      scrollbar-width:none;
+    }
+    body.panel-open .side-clip { opacity:1; }
+    .side-clip::-webkit-scrollbar { display:none; }
 
-  /* Large view */
-  #viewer {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    padding: 8px;
-    overflow: auto;
-    background: var(--bg);
-  }
-  #viewer[hidden] { display: none; }
-  #viewer:focus { outline: none; }
+    /* images: 1% padding on all sides and between them */
+    .side-track { width:100%; padding:1% 1% 0 1%; }
+    .side-track .side-img { margin-bottom:0%; }
+    .side-track .side-img:last-child { margin-bottom:1%; }
 
-  #viewer img {
-    display: block;
-    width: auto;
-    height: auto;
-    max-width: 100%;
-    max-height: calc(100vh - 2.6em - 22px);
-    max-height: calc(100dvh - 2.6em - 22px);
-    cursor: pointer;
-  }
-  #v-text { margin: 3px 0 0; }
-  .controls { margin: 0; }
-  .controls button {
-    font: inherit;
-    font-weight: bold;
-    color: inherit;
-    background: none;
-    border: 0;
-    padding: 0;
-    margin-right: .35em;
-    cursor: pointer;
-  }
-  #v-count { color: var(--muted); }
-</style>
+    /* text paragraphs: consecutive paragraphs are separated by one blank line */
+    .side-para + .side-para { margin-top:1.25em; }
+    /* links inside project text */
+    .side-para a { color:inherit; text-decoration:underline; text-underline-offset:0.12em; cursor:pointer; }
+    .side-para a:hover { color:#9a9a9a; }
+    /* text placed between images — sits in the same column as the body above */
+    .side-track .side-text {
+      margin:3% 0 4% 50%;
+      padding-right:1%;
+      font-size:0.7em;
+      line-height:1.25;
+      color:#000000;
+    }
+    .side-track .side-text:first-child { margin-top:1%; }
+    .side-track .side-img img {
+      width:100%; height:auto; display:block;
+      pointer-events:none; -webkit-user-drag:none;
+      opacity:0; transition:opacity .3s ease;
+      background:#f0f0f0;   /* light placeholder while decoding */
+    }
+    .side-track .side-img img.loaded { opacity:1; }
+    .side-track .side-img .side-cap {
+      display:block;
+      color:#b5b5b5;
+      font-size:0.6em;
+      line-height:1.2;
+      margin-top:0.3em;
+    }
+
+    /* description text — black on white, no borders */
+    .side-desc {
+      width:100%;
+      color:#000000; line-height:1.25;
+      background:transparent;
+      text-align:left;
+      padding:2% 2% 0 2%;
+      letter-spacing:0;
+    }
+    /* title spans the full width across the top */
+    .side-title {
+      width:50%;
+      font-size:0.8em;
+      padding-bottom:10%;
+    }
+    .side-title .side-subtitle {
+      display:block;
+      color:#b5b5b5;
+      margin-top:0.4em;
+    }
+    /* meta (left) and body (right) sit side by side, aligned at the same top */
+    .side-cols { display:flex; width:100%; align-items:flex-start; padding-bottom:2%; }
+    .side-cols .side-meta {
+      width:50%;
+      padding-right:2%;
+      color:#b5b5b5;
+      font-family: Arial, sans-serif;
+      font-size:0.7em;
+    }
+    .side-cols .side-body {
+      width:50%;
+      font-size:0.7em;
+    }
+
+    /* related works — rounded grey buttons after the "Related works" label */
+    .side-related {
+      width:100%;
+      padding-top:6px;   /* a few pixels below the meta lines */
+    }
+
+    /* desktop: title (left) + related works (right) share the top row */
+    .side-toprow { display:flex; width:100%; align-items:flex-start; padding-bottom:10%; }
+    .side-toprow .side-title { padding-bottom:0; }   /* gap moves to the row */
+    .side-toprow .side-related-col {
+      width:50%;
+      font-size:0.7em;   /* same scale as .side-meta so pills match the meta size */
+    }
+    .side-toprow .side-related-col .side-related { padding-top:0; }
+    .side-related .side-related-title {
+      color:#b5b5b5;
+      font-family: Arial, sans-serif;
+      font-size:1em;   /* same size as the meta lines (parent .side-meta is 0.7em) */
+      letter-spacing:0.02em;
+      margin-right:0.4em;
+    }
+    .side-related .related-btns {
+      display:inline;   /* buttons flow right after the label text */
+    }
+    .side-related .related-btn {
+      display:inline-block;
+      background:#b5b5b5;
+      color:#ffffff;
+      font-family: Arial, sans-serif;
+      font-size:1em;   /* match the meta / label size */
+      line-height:1.2;
+      padding:0.2em 0.7em;
+      margin:0 0.3em 0.3em 0;
+      border-radius:999px;
+      cursor:pointer;
+      border:none;
+      transition:background .15s;
+      pointer-events:all;
+      vertical-align:middle;
+      white-space:nowrap;
+      text-align:left;
+    }
+    .side-related .related-btn:hover { background:#9a9a9a; }
+
+    /* carousel captions: same look as the side-panel captions (.side-cap),
+       laid over the bottom-left corner of their image so they take no space.
+       To put them at the top of the image instead, swap bottom:4px for top:4px. */
+    .image-wrapper .caption {
+      position:absolute; left:5px; bottom:4px;
+      max-width:calc(100% - 80px);   /* keeps clear of the thumbnail bar */
+      color:#ffffff;
+      font-size:0.8rem;   /* the wrapper is font-size:0, so rem; same 9.6px as .side-cap */
+      line-height:1.2;
+      pointer-events:none;
+      mix-blend-mode:normal;   /* caption is black on light images, white on dark images */
+    }
+
+    
+
+    @media (max-width:768px) {
+      .more-label { display:none; }
+    }
+
+    /* ── MOBILE ── */
+    @media (max-width:768px) {
+      .main-layout {
+        height: 100vh;
+        height: 100dvh;
+        min-height: -webkit-fill-available;
+      }
+      .thumb-bar { display:none; }
+      #footer {
+        top:20px; bottom:auto;   /* mobile: footer sits at the top */
+        width:100vw; font-size:1.0em; line-height:1.2;
+        mix-blend-mode:normal;
+        padding-left: env(safe-area-inset-left, 1px);
+        padding-right: env(safe-area-inset-right, 0px);
+        padding-bottom:0;
+      }
+      #archive-float { font-size:1.0em; }
+      
+      #bio {
+        width:100vw; font-size:.72em; line-height:1.3;
+        bottom: max(2px, env(safe-area-inset-bottom, 2px));
+        transition: opacity .3s;
+        padding-bottom: 0;
+      }
+      body.panel-open #bio { opacity:0; pointer-events:none; }
+      body.panel-open #footer { opacity:1; pointer-events:none; }
+
+      .side-panel {
+        position:fixed; top:0; right:0; height:100vh; height:100dvh;
+        z-index:200; width:0; background:#ffffff;
+      }
+      body.panel-open .side-panel  { width:88vw; }
+
+      .side-desc {
+        position:static; width:100%;
+        padding:1% 1% 0 1%;
+        padding-top:0.3em;   /* small breathing room at the top of the panel */
+        font-size:1em; line-height:1.27;
+        color:#000000;
+      }
+      /* small viewport: title 50% (left) + meta 50% (right) share the top row,
+         then spacing, then body/desc at full width below */
+      .side-head {
+        display:flex; width:100%; align-items:flex-start;
+        padding-bottom:2em;   /* spacing before the full-width desc row */
+      }
+      .side-head .side-title { width:50%; padding-bottom:0; }
+      .side-head .side-meta {
+        width:50%; padding-left:2%;
+        color:#b5b5b5;
+        font-family: Arial, sans-serif;
+        font-size:0.72em;   /* Arial reads larger than Times, so a touch smaller matches the title optically */
+      }
+      .side-cols { flex-direction:column; padding-bottom:0; }
+      .side-cols .side-meta { display:none; }   /* meta now live in .side-head on mobile */
+      .side-cols .side-body { width:100%; font-size:1em; }
+      .side-track .side-text {
+        margin:4% 0 6% 0; padding-right:0;
+        font-size:1em; line-height:1.27;
+      }
+      .side-related { padding-top:6px; }
+      .side-related .side-related-title,
+      .side-related .related-btn { font-size:1em; }   /* same as the mobile meta */
+    }
+
+    /* ── ARCHIVE VIEW (in-page swap) ── */
+    #archive-view {
+      position:fixed; inset:0; z-index:300;
+      background:#ffffff; color:#000;
+      overflow-y:auto; -webkit-overflow-scrolling:touch;
+      display:none;
+      font-family:'Times New Roman', Times, serif;
+      -webkit-user-select:text; user-select:text;
+    }
+    body.archive-open { overflow:hidden; }
+    body.archive-open #archive-view { display:block; }
+
+    #archive-view ::selection { background-color:#ffea00; }
+    #archive-view a { color:inherit; }
+
+    /* one shared footer: in the archive it only turns black and sits above
+       the archive page; the floating link does the same and swaps
+       "Archive" for "← Back" */
+    #archive-back { display:none; }
+    body.archive-open #archive-open { display:none; }
+    body.archive-open #archive-back { display:inline; }
+    body.archive-open #footer { color:#000000; z-index:310; }
+    body.archive-open #archive-float { color:#000000; z-index:311; }
+
+    /* archive: the year (or the type) hangs in the margin, entries run beside it.
+       One size, black only, space is the only separator. */
+    #archive-content {
+      padding-left:25vw;   /* desktop: the archive takes the right 60% of the screen */
+      padding-right:2vw;
+      padding-top:5px;
+      padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); /* last entries can scroll clear of the footer */
+      font-size:1.0em; line-height:1.20;
+      color:#000000;
+    }
+    /* the margin is the same width in both views, so the entries
+       don't jump sideways when switching */
+    .arch-group { display:grid; grid-template-columns:8.5em minmax(0, 1fr); column-gap:1em; }   /* entries fill the rest of the width */
+    .arch-group + .arch-group { margin-top:0.9em; }   /* a blank line between groups */
+    .arch-meta { padding-left:1em; }   /* mobile: everything after the title, indented under it */
+    .arch-entry a { text-underline-offset:0.12em; }
+    .arch-nowrap { white-space:nowrap; }
+    @media (min-width:769px) {
+      /* desktop: two columns, the title on the left, the details on the right.
+         Every entry uses the same split, so the columns line up down the list. */
+      .arch-entry { display:grid; grid-template-columns:2fr 3fr; column-gap:1.5em; }   /* 60% title, 40% details */
+      /* a line that wraps inside a column hangs 1em in, so it reads as a
+         continuation and not as the start of the next entry */
+      .arch-title, .arch-meta { padding-left:1em; text-indent:-1em; }
+    }
+    .by-type .arch-group > span { letter-spacing:0.2rem; }   /* category names, spaced out as before */
+
+    /* year / type switch — desktop: top-left corner, same size as the footer.
+       The view you're on is underlined, the other one is plain text. */
+    #arch-switch {
+      position:fixed; top:5px; left:5px; z-index:305;
+      font-size:1.25em; line-height:1.2; color:#000000;
+    }
+    #arch-switch button {
+      font:inherit; color:inherit; background:none; border:0; padding:0;
+      cursor:pointer; text-decoration:none; text-underline-offset:0.12em;
+    }
+    #arch-switch button[aria-pressed="true"] { text-decoration:underline; cursor:default; }
+
+    @media (max-width:768px) {
+      /* mobile: the footer holds the top, so the switch sits just below it,
+         above the list, and scrolls with it */
+      #arch-switch {
+        position:static;
+        padding:150px 2vw 0;
+        font-size:1em;
+      }
+      #archive-content {
+        padding-left:2vw; padding-right:2vw;
+        padding-top:0.9em;
+        padding-bottom:10vh;
+        font-size:1.00em; line-height:1.2;
+      }
+      .arch-group { grid-template-columns:3.6em minmax(0, 1fr); column-gap:0.5em; }
+      /* type names are too long for the narrow margin: put them above their entries */
+      .by-type .arch-group { grid-template-columns:minmax(0, 1fr); }
+    }
+
+    /* loading: keep carousel invisible until visible images are ready */
+    #carousel-track { opacity:0; }
+    body.ready #carousel-track { opacity:1; }
+
+    #loader {
+      position:fixed; inset:0; z-index:400;
+      background:#000;
+      pointer-events:none;
+    }
+    body.ready #loader { display:none; }
+  </style>
 </head>
 <body>
+<div id="loader"></div>
+<div class="main-layout">
 
-<div class="page">
-  <p class="intro">
-    <strong><a href="./">Your Name</a></strong>
-    Matteo Bettini is a photographer based in [city]. This site is a work in progress,
-    but feel free to look around at your leisure. My current series is called [Series title],
-    which is about [one line on what the series is about]. Click any photograph to see it larger.
-    <a href="mailto:you@example.com">Get in touch</a> if you’d like to work together or buy a print.
-    <a href="https://www.instagram.com/yourname">Instagram.</a>
-  </p>
+  <div class="scroll-area" id="scroll-area">
+    <div class="carousel-clip" id="carousel-clip">
+      <div class="carousel-track" id="carousel-track">
+        <div id="image-list">
 
-  <main id="work"></main>
+          <div class="image-wrapper" data-device="desktop" data-project="shadow-circuits">
+            <img src="img/mam_1_hor.jpg">
+            <span class="caption">"I was sure I would find it here". MaMA, Rotterdam (2026) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="viewing-conditions">
+            <img src="img/viewingconditions_15.jpg">
+            <span class="caption">"Viewing Conditions". Het Nieuwe Instituut, Rotterdam (2026) </span>
+          </div>
+                    <div class="image-wrapper" data-device="desktop" data-project="a-place">
+            <img src="img/aplace_2.jpg">
+            <span class="caption">"A Place Without a Name". Metamorphic Zone (2023-now) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="gas-route">
+            <img src="img/TheGasRoute_6.png">
+            <span class="caption">"Il signore che viene da lontano". (2023) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="22x11x11">
+            <img src="img/22x11x11_5_rotate.jpg">
+            <span class="caption">"22.86x11.43x11.43". Palazzo Bronzo, Genoa (2025) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="ilsignore">
+            <img src="img/uno.jpg">
+            <span class="caption">"The Gas Route" (2023) </span>
+          </div>
+                    <div class="image-wrapper" data-device="desktop" data-project="where-to">
+            <img src="img/dem2_1.jpg">
+            <span class="caption">"Fragments of Democracy II". Circolo del Design, Turin (2025) </span>
+          </div>
+                      <div class="image-wrapper" data-device="desktop" data-project="agreat">
+            <img src="img/gasroute.png">
+            <span class="caption">"The Gas Route" (2023) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="ppv">
+            <img src="img/ppv_5.jpg">
+            <span class="caption">"Perfect-Perfect-View". Oud House, Rotterdam (2025)  </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="agreat">
+            <img src="img/Agreat_2.jpg">
+            <span class="caption">"A great place for a ride" (2023) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="algo">
+            <img src="img/AlgorithmicMemories_4.png">
+            <span class="caption">"Algorithmic Memories" (2021) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="fragments-democracy">
+            <img src="img/FragmentsofDemocracy_1_rotate.jpg">
+            <span class="caption">"Fragments of Democracy I". Bundeskunsthalle, Bonn (2024) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop" data-project="ilsignore">
+            <img src="img/ilsignore_7.jpg">
+            <span class="caption">"The Gas Route" (2023) </span>
+          </div>
+          <div class="image-wrapper" data-device="desktop">
+            <img src="img/Anti-NavigationTools_1.png">
+            
+          </div>
 
-  <footer>
-    <p>
-      ©<span id="year">2026</span> Your Name. You can reach me at you [at] example.com.
-      <a href="mailto:you@example.com">Write.</a>
-    </p>
-  </footer>
+<!--mobile-->
+
+
+
+
+<div class="image-wrapper" data-device="mobile" data-project="shadow-circuits">
+            <img src="img/mam_1-2.jpg" loading="lazy">
+            <span class="caption">"I was sure I would find it here". MaMA Rotterdam (2026) </span>
+          </div>
+                    <div class="image-wrapper" data-device="mobile" data-project="a-place">
+            <img src="img/gasroute-1.png" loading="lazy">
+            <span class="caption">"The Gas Route" (2023)</span>
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="viewing-conditions">
+            <img src="img/viewingconditions_12.jpg" loading="lazy">
+            <span class="caption">"Viewing Conditions". Het Nieuwe Instituut, Rotterdam (2026) </span>
+          </div>
+                    <div class="image-wrapper" data-device="mobile" data-project="ppv">
+            <img src="img/ppv_4.jpg" loading="lazy">
+            <span class="caption">"Perfect-Perfect-View". Oud House, Rotterdam (2025)  </span>
+                    </div>
+
+                    <div class="image-wrapper" data-device="mobile" data-project="algo">
+            <img src="img/AlgorithmicMemories_4 copy.png" loading="lazy">
+            <span class="caption">"Algorithmic Memories". (2021) </span>
+          </div>
+
+          <div class="image-wrapper" data-device="mobile" data-project="22x11x11">
+            <img src="img/22x11x11_6.jpg" loading="lazy">
+            <span class="caption">"22.86x11.43x11.43". Palazzo Bronzo, Genoa (2025) </span>
+          </div>
+                    
+
+
+          <div class="image-wrapper" data-device="mobile" data-project="">
+            <img src="img/uno_2.jpg" loading="lazy">
+            <span class="caption"> </span>
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="agreat">
+            <img src="img/Agreat_4.jpg" loading="lazy">
+            <span class="caption">A great place for a ride (2023) </span>
+          </div>
+
+          <div class="image-wrapper" data-device="mobile" data-project="fragments-democracy">
+            <img src="img/FragmentsofDemocracy_1.jpg" loading="lazy">
+            <span class="caption">Fragments of Democracy I (2024) </span>
+          </div>
+          <!-- <div class="image-wrapper" data-project="gas-route">
+            <img src="img/frontiere_7.jpg" loading="lazy">
+            <span class="caption">The Gas Route (2023) </span>
+          </div> -->
+
+
+
+        
+          <!-- <div class="image-wrapper" data-device="mobile" data-project="shadow-circuits">
+            <img src="img/mam_5.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="viewing-conditions">
+            <img src="img/viewingconditions_2.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="22x11x11">
+            <img src="img/22x11x11_6.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="ilsignore">
+            <img src="img/ilsignore_8.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="fragments-democracy">
+            <img src="img/FragmentsofDemocracy_1.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="agreat">
+            <img src="img/Agreat_4.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile" data-project="where-to">
+            <img src="img/dem2_2.jpg" loading="lazy">
+          </div>
+          <div class="image-wrapper" data-device="mobile">
+            <img src="img/IMG_8522.jpg" loading="lazy">
+          </div> -->
+
+        </div>
+      </div>
+    </div>
+    <!-- <p id="archive"> <a href="archive/"> Archive </a> </p> -->
+    
+  </div>
+  <!-- <div>
+    <img src="img/graph2.png" style="position:fixed; top:0; right:0; width:80%; height:30%; z-index:1; pointer-events:none; mix-blend-mode:screen;">
+  </div> -->
+
+  <div class="side-panel" id="side-panel">
+    <div class="side-clip" id="side-clip">
+      <div class="side-desc" id="side-desc"></div>
+      <div class="side-track" id="side-track"></div>
+      
+    </div>
+  </div>
+
+</div>
+<div class="thumb-bar" id="thumb-bar"></div>
+
+<!-- the one footer, shared by the main page and the archive -->
+<p id="footer">
+  <span id="name">Matt</span>eo  <span id="name2">  Bettini</span><br>
+  Information design and art practice<br>
+  Rotterdam (NL)<br>
+  <a href="mailto:mte.bettini@gmail.com">mte.bettini@gmail.com</a><br>
+  <!-- <a href="https://www.instagram.com/600mt/">Instagram</a><br> -->
+  <!-- <img src="img/thunder-2.png" style="position:revert; bottom:0; left:0; width:100%; height:auto; z-index:1; pointer-events:none; mix-blend-mode:screen;"> -->
+</p>
+
+<!-- the archive link, separate from the footer: a random tilt and a random
+     spot around it on every load (see ARCHIVE FLOAT at the end of the script) -->
+<p id="archive-float"><a href="#archive" id="archive-open">Archive</a><a href="#" id="archive-back">← Back</a></p>
+
+<div id="archive-view">
+  <p id="arch-switch"><button type="button" data-mode="year" aria-pressed="false">Year</button> / <button type="button" data-mode="type" aria-pressed="true">Type</button></p>
+  <div id="archive-content" class="by-type"></div>
 </div>
 
-<div id="viewer" role="dialog" aria-modal="true" aria-label="Photograph" tabindex="-1" hidden>
-  <img alt="">
-  <p id="v-text"></p>
-  <p class="controls">
-    <button type="button" data-go="-1">previous</button>
-    <button type="button" data-go="1">next</button>
-    <button type="button" data-close>close</button>
-    <span id="v-count"></span>
-  </p>
-</div>
-
+<script src="projects-data.js"></script>
 <script>
-/* ------------------------------------------------------------------
-   YOUR PHOTOGRAPHS
-   Put the image files in the img/ folder next to this index.html,
-   then list them here in the order you want them shown.
+const PROJECTS = window.PROJECTS;
 
-   file   the file name inside img/            (required)
-   title  first line of the caption            (optional)
-   info   second line, e.g. place and year     (optional)
-   note   third line, e.g. edition or price    (optional)
-   sold   true greys the photo out             (optional)
+const carouselClip  = document.getElementById('carousel-clip');
+const carouselTrack = document.getElementById('carousel-track');
+const imageList     = document.getElementById('image-list');
+const sidePanel     = document.getElementById('side-panel');
+const sideClip      = document.getElementById('side-clip');
+const sideTrack     = document.getElementById('side-track');
+const sideDesc      = document.getElementById('side-desc');
+const thumbBar      = document.getElementById('thumb-bar');
 
-   Add or remove series by copying a { title, photos } block.
-   ------------------------------------------------------------------ */
-const series = [
-  {
-    title: "Series title — Place, 2026",
-    photos: [
-      { file: "01.jpg", title: "Untitled", info: "Place, 2026" },
-      { file: "02.jpg", title: "Untitled", info: "Place, 2026" },
-      { file: "03.jpg", title: "Untitled", info: "Place, 2026", note: "Print, edition of 5", sold: true },
-      { file: "04.jpg", title: "Untitled", info: "Place, 2026" },
-      { file: "05.jpg", title: "Untitled", info: "Place, 2026" },
-      { file: "06.jpg", title: "Untitled", info: "Place, 2026" },
-      { file: "07.jpg", title: "Untitled", info: "Place, 2026" },
-      { file: "08.jpg", title: "Untitled", info: "Place, 2026" }
-    ]
-  },
-  {
-    title: "Second series — Place, 2025",
-    photos: [
-      { file: "09.jpg", title: "Untitled", info: "Place, 2025" },
-      { file: "10.jpg", title: "Untitled", info: "Place, 2025" },
-      { file: "11.jpg", title: "Untitled", info: "Place, 2025" }
-    ]
+const isMobile = window.innerWidth <= 768;
+
+/* ── image helpers ───────────────────────────────────────────
+   Normalise an images entry to { src, caption }, and keep a
+   small in-memory cache so a project's images are only ever
+   fetched once. Prefetching on hover/touch means they are
+   usually already in the browser cache by the time the panel
+   opens — so it feels instant. */
+function imgEntry(item) {
+  if (typeof item === 'string') return { src: item, caption: '' };
+  return { src: item.src || '', caption: item.caption || '' };
+}
+
+/* Ordered side-panel content for a project, as a list of
+   { type:'text', text } and { type:'image', src, caption } blocks.
+   Uses `content` when the project has one (set in the project editor);
+   otherwise falls back to body paragraphs followed by images. */
+function splitParas(body) {
+  return String(body || '').replace(/\r/g, '')
+    .split(/\n\s*\n/)
+    .map(par => par.split('\n').map(l => l.trim()).join('\n').trim())
+    .filter(Boolean);
+}
+
+function projectBlocks(p) {
+  if (Array.isArray(p.content)) {
+    return p.content.map(item => {
+      if (typeof item === 'string') return item ? { type:'image', src:item, caption:'' } : null;
+      if (item && typeof item.text === 'string') return item.text.trim() ? { type:'text', text:item.text.trim() } : null;
+      if (item && item.src) return { type:'image', src:item.src, caption:item.caption || '' };
+      return null;
+    }).filter(Boolean);
   }
+  const blocks = splitParas(p.body).map(text => ({ type:'text', text }));
+  (p.images || []).forEach(item => {
+    const e = imgEntry(item);
+    if (e.src) blocks.push({ type:'image', src:e.src, caption:e.caption });
+  });
+  return blocks;
+}
+
+function projectImages(p) {
+  return projectBlocks(p).filter(b => b.type === 'image');
+}
+
+/* Links inside project text. Paragraphs stay plain text, except for links
+   written as <a href="https://…">words</a> (the project editor's "link"
+   button writes them). Everything else is still escaped.
+   - `src=` is accepted as a slip for `href=`
+   - www.… gets https://, a bare email gets mailto:
+   - #project-key opens that project in the panel
+   - web addresses open in a new tab */
+const TEXT_LINK_RE = /<a\s+(?:[^>]*?\s)?(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|“([^”]*)”|([^\s>]+))[^>]*>([\s\S]*?)<\/a\s*>/gi;
+
+function linkHref(raw) {
+  const url = String(raw || '').trim();
+  if (!url) return '';
+  if (/^www\./i.test(url)) return 'https://' + url;
+  if (/^[^\s@\/:]+@[^\s@\/]+\.[^\s@\/]+$/.test(url)) return 'mailto:' + url;
+  // only web, mail and phone schemes (no javascript: etc.)
+  if (/^[a-z][a-z0-9+.\-]*:/i.test(url) && !/^(https?|mailto|tel):/i.test(url)) return '';
+  return url;
+}
+
+function textHtml(text) {
+  let out = '', last = 0, m;
+  TEXT_LINK_RE.lastIndex = 0;
+  while ((m = TEXT_LINK_RE.exec(text))) {
+    out += escHtml(text.slice(last, m.index));
+    last = TEXT_LINK_RE.lastIndex;
+    const href  = linkHref([m[1], m[2], m[3], m[4]].find(v => v !== undefined));
+    const label = escHtml(m[5]) || escHtml(href);
+    if (!href) { out += label; continue; }   // no usable address: show the words only
+    const external = /^(https?:)?\/\//i.test(href);
+    out += '<a href="' + escHtml(href).replace(/"/g, '&quot;') + '"'
+         + (external ? ' target="_blank" rel="noopener"' : '') + '>' + label + '</a>';
+  }
+  return out + escHtml(text.slice(last));
+}
+
+function paraHtml(text) {
+  return '<div class="side-para">' + textHtml(text).replace(/\n/g, '<br>') + '</div>';
+}
+
+const _prefetched = new Set();   // project ids already kicked off
+const _imgCache   = new Map();   // src -> Image (keeps it alive/decoded)
+
+function prefetchImg(src) {
+  if (!src || _imgCache.has(src)) return _imgCache.get(src);
+  const i = new Image();
+  i.decoding = 'async';
+  i.src = src;
+  _imgCache.set(src, i);
+  return i;
+}
+
+function prefetchProject(id) {
+  if (!id || _prefetched.has(id)) return;
+  const p = PROJECTS[id];
+  if (!p) return;
+  _prefetched.add(id);
+  projectImages(p).forEach(b => prefetchImg(b.src));
+}
+
+function makeCarousel(track, getOneH, speed) {
+  let pos    = 0;
+  let lastTs = 0;
+  let acc    = 0;
+
+  let t0y = 0, tPos0 = 0, tActive = false;
+
+  function wrap(p) {
+    const h = getOneH();
+    if (h <= 0) return Math.max(0, p);
+    return ((p % h) + h) % h;
+  }
+
+  function commit(p) {
+    pos = wrap(p);
+    track.style.transform = `translateY(-${pos}px)`;
+  }
+
+  function getPos()  { return pos; }
+  function setPos(p) { commit(p); }
+
+  function addWheel(delta) {
+    commit(pos + delta * 1);
+  }
+
+  function touchStart(e) {
+    tActive = true;
+    t0y     = e.touches[0].clientY;
+    tPos0   = pos;
+  }
+
+  function touchMove(e) {
+    if (!tActive) return;
+    commit(tPos0 + (t0y - e.touches[0].clientY));
+  }
+
+  function touchEnd(e) {
+    tActive = false;
+    return Math.abs(t0y - e.changedTouches[0].clientY);
+  }
+
+  function step(ts) {
+    if (!lastTs) { lastTs = ts; return; }
+    const dt = Math.min(ts - lastTs, 32);
+    lastTs = ts;
+    if (!tActive) {
+      acc += speed * dt / 1000;
+      if (acc >= 1) {
+        const px = Math.floor(acc);
+        acc -= px;
+        commit(pos + px);
+      }
+    }
+  }
+
+  return { step, touchStart, touchMove, touchEnd, setPos, getPos, addWheel };
+}
+
+let mainOneH = 0;
+let panelOpen = false;
+let currentProject = null;
+
+const mainC = makeCarousel(carouselTrack, () => mainOneH, 30);
+
+let visibleWrappers = [], wrapperOffsets = [];
+function buildThumbs() {
+  if (isMobile) return;
+  thumbBar.innerHTML = ''; visibleWrappers = [];
+  document.querySelectorAll('#image-list .image-wrapper').forEach(w => {
+    if (w.style.display === 'none') return;
+    visibleWrappers.push(w);
+    const media = w.querySelector('img') || w.querySelector('video');
+    if (!media) return;
+    const ti = document.createElement('div'); ti.className = 'thumb-item';
+    ti.dataset.index = visibleWrappers.length - 1;
+    const ti2 = document.createElement('img');
+    ti2.src = media.tagName === 'VIDEO' ? (media.poster||'') : media.src;
+    ti.appendChild(ti2); thumbBar.appendChild(ti);
+    ti.addEventListener('click', () => mainC.setPos(wrapperOffsets[+ti.dataset.index] || 0));
+  });
+}
+
+function calcOffsets() { wrapperOffsets = visibleWrappers.map(w => w.offsetTop); }
+
+function updateThumb() {
+  if (isMobile || !mainOneH) return;
+  const pos = mainC.getPos() % mainOneH;
+  const vc = pos + window.innerHeight / 3;
+  let ai = 0;
+  for (let i = 0; i < wrapperOffsets.length; i++) { if (wrapperOffsets[i] <= vc) ai = i; else break; }
+  thumbBar.querySelectorAll('.thumb-item').forEach((t,i) => t.classList.toggle('active', i===ai));
+}
+
+function nl2br(s) {
+  return (s||'').trim().replace(/\n/g,'<br>');
+}
+
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function openPanel(projectId) {
+  const p = PROJECTS[projectId];
+  if (!p) return;
+
+  // reset scroll column
+  sideTrack.innerHTML = '';
+  sideClip.scrollTop = 0;
+
+  const titleHtml = '<div class="side-title">'
+      + (p.title ? escHtml(p.title).replace(/\n/g, '<br>') : '')
+      + (p.subtitle ? '<span class="side-subtitle">' + escHtml(p.subtitle) + '</span>' : '')
+      + '</div>';
+
+  let metaHtml = '';
+  (p.meta || []).forEach(line => { metaHtml += escHtml(line) + '<br>'; });
+  // text blocks at the start of the content sit next to the meta, as before;
+  // everything after that is stacked below in the order set in the editor.
+  const blocks = projectBlocks(p);
+  let lead = 0;
+  while (lead < blocks.length && blocks[lead].type === 'text') lead++;
+  const bodyHtml = blocks.slice(0, lead).map(b => paraHtml(b.text)).join('');
+
+  // related works — rounded grey buttons, one per valid related project key.
+  let relatedHtml = '';
+  const relKeys = (p.related || []).filter(k => k && PROJECTS[k] && k !== projectId);
+  if (relKeys.length) {
+    // shorten a long title to its first 3 words + "…" for the pill label
+    const shortLabel = (t) => {
+      const words = t.trim().split(/\s+/);
+      return words.length > 3 ? words.slice(0, 3).join(' ') + '…' : t.trim();
+    };
+    let btns = '';
+    relKeys.forEach(k => {
+      const full = (PROJECTS[k].title || k).replace(/\n/g, ' ').trim();
+      btns += '<span class="related-btn" data-related="' + escHtml(k) + '"'
+            + ' title="' + escHtml(full) + '">'
+            + escHtml(shortLabel(full)) + '</span>';
+    });
+    relatedHtml = '<div class="side-related">'
+        + '<span class="side-related-title">Related works</span>'
+        + '<div class="related-btns">' + btns + '</div>'
+        + '</div>';
+  }
+
+  // mobile: title (left) + meta (right) share a top row; body sits full width below.
+  // desktop: title spans the top, meta (left) + body (right) sit beneath.
+  let dh = '';
+  if (isMobile) {
+    dh += '<div class="side-head">';
+    dh += titleHtml;
+    dh += '<div class="side-meta">' + metaHtml + relatedHtml + '</div>';
+    dh += '</div>';
+    dh += '<div class="side-cols">';
+    dh += '<div class="side-body">' + bodyHtml + '</div>';
+    dh += '</div>';
+  } else {
+    // desktop: title (left) + related works (right) share the top row,
+    // top-aligned; meta (left) + body (right) sit beneath.
+    dh += '<div class="side-toprow">';
+    dh += titleHtml;
+    dh += '<div class="side-related-col">' + relatedHtml + '</div>';
+    dh += '</div>';
+    dh += '<div class="side-cols">';
+    dh += '<div class="side-meta">' + metaHtml + '</div>';
+    dh += '<div class="side-body">' + bodyHtml + '</div>';
+    dh += '</div>';
+  }
+
+  sideDesc.innerHTML = dh;
+
+  // stack the remaining blocks — images and text — in their set order.
+  // first image loads eagerly; the rest lazily so the top one appears fast.
+  // all images fade in when decoded for a smooth, non-janky reveal.
+  let imgIdx = 0;
+  blocks.slice(lead).forEach(block => {
+    if (block.type === 'text') {
+      // consecutive paragraphs share one text column
+      let box = sideTrack.lastElementChild;
+      if (!box || !box.classList.contains('side-text')) {
+        box = document.createElement('div');
+        box.className = 'side-text';
+        sideTrack.appendChild(box);
+      }
+      box.insertAdjacentHTML('beforeend', paraHtml(block.text));
+      return;
+    }
+
+    const { src, caption } = block;
+    const fig = document.createElement('div');
+    fig.className = 'side-img';
+
+    const img = document.createElement('img');
+    img.loading  = imgIdx++ === 0 ? 'eager' : 'lazy';
+    img.decoding = 'async';
+    img.draggable = false;
+    const markLoaded = () => img.classList.add('loaded');
+    img.addEventListener('load', markLoaded, { once:true });
+    img.addEventListener('error', markLoaded, { once:true });
+    img.src = src;                       // reuses the prefetched/cached fetch
+    if (img.complete && img.naturalWidth) markLoaded();  // already cached
+    fig.appendChild(img);
+
+    if (caption) {
+      const cap = document.createElement('span');
+      cap.className = 'side-cap';
+      cap.textContent = caption;
+      fig.appendChild(cap);
+    }
+
+    sideTrack.appendChild(fig);
+  });
+
+  // warm the related projects so they open instantly
+  relKeys.forEach(prefetchProject);
+
+  panelOpen = true;
+  currentProject = projectId;
+  document.body.classList.add('panel-open');
+
+  // give this project its own address: 600mt.com/#<key>
+  if (('#' + projectId) !== location.hash) {
+    history.replaceState(null, '', '#' + projectId);
+  }
+}
+
+function closePanel() {
+  if (!panelOpen) return;
+  panelOpen = false;
+  currentProject = null;
+  document.body.classList.remove('panel-open');
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  setTimeout(() => {
+    if (!panelOpen) {
+      sideTrack.innerHTML = '';
+      sideDesc.innerHTML = '';
+      sideClip.scrollTop = 0;
+    }
+  }, 300);
+}
+
+/* clicking a "Related works" button opens that project's panel */
+sideDesc.addEventListener('click', e => {
+  const btn = e.target.closest('.related-btn');
+  if (!btn) return;
+  const key = btn.dataset.related;
+  if (key && PROJECTS[key]) { sideClip.scrollTop = 0; openPanel(key); }
+});
+
+/* ── URL routing: 600mt.com/#<key> opens a project directly ────
+   Reflects the open project in the address bar (see openPanel /
+   closePanel) and reacts to a hash present on load or changed via
+   the browser's back/forward buttons. */
+function projectFromHash() {
+  const key = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim();
+  return key && PROJECTS[key] ? key : null;
+}
+function syncPanelToHash() {
+  const key = projectFromHash();
+  if (key) {
+    if (key !== currentProject) { sideClip.scrollTop = 0; openPanel(key); }
+  } else if (panelOpen) {
+    closePanel();
+  }
+}
+window.addEventListener('hashchange', syncPanelToHash);
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+/* ── swipe right on the panel to close ─────────────────────── */
+let swX = 0, swY = 0, swActive = false, swScrollTop = 0;
+sidePanel.addEventListener('touchstart', e => {
+  swActive = true;
+  swX = e.touches[0].clientX;
+  swY = e.touches[0].clientY;
+  swScrollTop = sideClip.scrollTop;
+}, {passive:true});
+sidePanel.addEventListener('touchend', e => {
+  if (!swActive) return;
+  swActive = false;
+  const dx = e.changedTouches[0].clientX - swX;
+  const dy = e.changedTouches[0].clientY - swY;
+  // horizontal rightward swipe, not a vertical scroll of the content
+  if (dx > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) closePanel();
+}, {passive:true});
+
+/* ── carousel animation loop ──────────────────────────────────
+   The loop period height (mainOneH) is measured ONCE, from the
+   first list copy, as soon as it reports a stable non-zero
+   height — then locked. Re-measuring every frame used to make
+   the wrap point jump whenever a lazy image finished loading,
+   which read as the page "refreshing" during a fast scroll.
+   With eager carousel images + a one-time lock, the height is
+   stable and the scroll stays smooth. A resize re-unlocks it. */
+let heightLocked = false;
+function lockHeight() {
+  const liveH = carouselTrack.children[0] ? carouselTrack.children[0].offsetHeight : 0;
+  if (liveH > 0) {
+    if (liveH !== mainOneH) { mainOneH = liveH; mainC.setPos(mainC.getPos()); }
+    heightLocked = true;
+  }
+}
+function step(ts) {
+  if (!heightLocked) lockHeight();
+  mainC.step(ts);
+  updateThumb();
+  requestAnimationFrame(step);
+}
+
+/* ── prefetch a project's images before the panel opens ────── */
+// desktop: hovering a project image
+carouselClip.addEventListener('mousemove', e => {
+  const w = e.target.closest && e.target.closest('.image-wrapper.has-project');
+  if (w) prefetchProject(w.dataset.project);
+});
+// mobile: at the very start of a touch (fires before the tap resolves)
+carouselClip.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const w = el && el.closest('.image-wrapper.has-project');
+  if (w) prefetchProject(w.dataset.project);
+}, {passive:true});
+
+carouselClip.addEventListener('touchstart', e => mainC.touchStart(e), {passive:true});
+carouselClip.addEventListener('touchmove',  e => mainC.touchMove(e),  {passive:true});
+carouselClip.addEventListener('touchend',   e => {
+  const dy = mainC.touchEnd(e);
+  if (dy < 10) {
+    if (panelOpen) { closePanel(); return; }
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const w  = el && el.closest('.image-wrapper.has-project');
+    if (w) openPanel(w.dataset.project);
+  }
+}, {passive:true});
+
+let mDragActive = false, mDragY = 0, mDragPos0 = 0;
+carouselClip.addEventListener('mousedown', e => {
+  if (isMobile) return;
+  mDragActive = true; mDragY = e.clientY; mDragPos0 = mainC.getPos();
+  e.preventDefault();
+});
+document.addEventListener('mousemove', e => {
+  if (!mDragActive) return;
+  mainC.setPos(mDragPos0 + (mDragY - e.clientY));
+});
+document.addEventListener('mouseup', e => {
+  if (!mDragActive) return;
+  const wasDrag = Math.abs(mDragY - e.clientY) > 4;
+  mDragActive = false;
+  if (!wasDrag) {
+    if (panelOpen) { closePanel(); return; }
+    const w = e.target.closest('.image-wrapper.has-project');
+    if (w) openPanel(w.dataset.project);
+  }
+});
+
+carouselClip.addEventListener('wheel', e => {
+  e.preventDefault();
+  mainC.addWheel(e.deltaY);
+}, {passive: false});
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('dragstart',   e => e.preventDefault());
+
+const videoObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const video = entry.target;
+    if (entry.isIntersecting) {
+      if (video.readyState === 0) video.load();
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  });
+}, { rootMargin: '100% 0px' });
+
+function filterImages() {
+  document.querySelectorAll('#image-list .image-wrapper').forEach(w => {
+    const d = w.dataset.device || 'both';
+    const show = d==='both'||(d==='mobile'&&isMobile)||(d==='desktop'&&!isMobile);
+    w.style.display = show ? 'block' : 'none';
+    if (show && w.dataset.project) w.classList.add('has-project');
+  });
+}
+
+function duplicateMain() {
+  const clone = imageList.cloneNode(true);
+  clone.id = 'image-list-clone';
+  clone.querySelectorAll('video').forEach(v => videoObserver.observe(v));
+  // clone.querySelectorAll('.image-wrapper[data-project]').forEach(w => w.classList.add('has-project'));
+  //disable
+  carouselTrack.appendChild(clone);
+}
+
+function measure() {
+  const first = carouselTrack.children[0];
+  mainOneH = first ? first.offsetHeight : 0;
+  calcOffsets();
+}
+
+filterImages();
+document.querySelectorAll('#image-list video').forEach(v => videoObserver.observe(v));
+
+// eager-load the visible originals so the strip is complete before we show it
+const visImgs = [...imageList.querySelectorAll('.image-wrapper')]
+  .filter(w => w.style.display !== 'none')
+  .map(w => w.querySelector('img'))
+  .filter(Boolean);
+visImgs.forEach(img => { img.loading = 'eager'; if (!img.src) img.src = img.src; });
+
+function reveal() {
+  if (document.body.classList.contains('ready')) return;
+  buildThumbs();
+  duplicateMain();
+  measure();
+  buildThumbs();          // rebuild now that images have real dimensions
+  calcOffsets();
+  heightLocked = false;   // measure a fresh, stable height on the next frame
+  requestAnimationFrame(step);
+  document.body.classList.add('ready');
+  idlePrefetchProjects();  // warm project images in the background
+  syncPanelToHash();       // deep link: 600mt.com/#<key> opens that project
+}
+
+function imgDone(img) {
+  return new Promise(res => {
+    if (img.complete && img.naturalHeight > 0) return res();
+    img.addEventListener('load',  res, {once:true});
+    img.addEventListener('error', res, {once:true});
+  });
+}
+
+/* When the browser is idle, quietly prefetch the FIRST image of each
+   project so the panel's top image is instant even without a hover
+   (e.g. on mobile taps). Full sets still load on hover/touch/open. */
+function idlePrefetchProjects() {
+  const ids = Object.keys(PROJECTS || {});
+  let n = 0;
+  const run = () => {
+    if (n >= ids.length) return;
+    const p = PROJECTS[ids[n++]];
+    const first = p && projectImages(p)[0];
+    if (first) prefetchImg(first.src);
+    schedule();
+  };
+  const schedule = () => {
+    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout:1500 });
+    else setTimeout(run, 300);
+  };
+  schedule();
+}
+
+// reveal once every visible image is loaded (with a safety timeout)
+let revealed = false;
+const doReveal = () => { if (!revealed) { revealed = true; reveal(); } };
+Promise.all(visImgs.map(imgDone)).then(doReveal);
+setTimeout(doReveal, 4000);
+// on resize, re-measure the loop height once (unlock, then relock next frame)
+window.addEventListener('resize', () => { measure(); heightLocked = false; });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) {} });
+
+/* ── ARCHIVE VIEW ── */
+const archiveData = [
+  { type:'presentation', name:'New Approaches to Critical Geovisualisation', year:'2026', month:6, location:'Halle, DE', details:'Burg Halle', link:'https://www.burg-halle.de/artikel/a/neue-ansaetze-kritischer-geovisualisierung-2026' },
+  { type:'workshop', name:'JPG Investigation Unit', year:'2026', month:3, location:'Milan, IT', details:'Accademia Aldo Galli', link:'' },
+  { type:'residency', name:'-1 Digital Lab Residency', year:'2026', month:3, location:'Rotterdam, NL', details:'Het Nieuwe Instituut', link:'' },
+  { type:'exhibition', name:'-1 DEMO', year:'2026', month:7, location:'Rotterdam, NL', details:'Nieuwe Instituut', link:'' },
+  { type:'exhibition', name:'Shadow Circuits', year:'2026', month:3, location:'Rotterdam, NL', details:'MaMA', link:'' },
+  { type:'exhibition', name:'To The Horizon', year:'2026', month:2, location:'Warsaw, PL', details:'Aspekty Gallery. Collaborator: Sonia Gorecka', link:'' },
+  { type:'writing', name:'A Place Without a Name', year:'2026', month:1, location:'', details:'Metamorphic Zone', link:'https://metamorphiczone.com/field-notes/a-place-without-a-name' },
+  { type:'web-site', name:'Literary Atlas of Volcanic and seismic Activities', year:'2025', month:12, location:'', details:'Collaborators: Federico Poni, Henry Albert, Alice Bisio', link:'https://prisma.fileli.unipi.it/' },
+  { type:'exhibition', name:'Fuori Pista/Off-track', year:'2025', month:11, location:'Bergamo, IT', details:'GresArt 671, together with Studio Folder', link:'' },
+  { type:'exhibition', name:'Where to, from Here?', year:'2025', month:6, location:'Torino, IT', details:'Circolo del Design, together with Studio Folder', link:'' },
+  { type:'exhibition', name:'Always Container, Sometimes Contained', year:'2025', month:6, location:'Rotterdam', details:'Oud House, part of Rotterdam Architecture Month', link:'' },
+  { type:'funding', name:'Practical Contribution', year:'2025', month:5, location:'Rotterdam, NL', details:'CBK Rotterdam', link:'' },
+  { type:'exhibition', name:'Emergence', year:'2025', month:4, location:'Genova, IT', details:'Palazzo Bronzo. Collaborator: Sonia Gorecka', link:'' },
+  { type:'web-site', name:'Transmedia Research Institute', year:'2025', month:4, location:'', details:'Collaborator: Sonia Gorecka', link:'https://www.transmediaresearch.institute/2025' },
+  { type:'funding', name:'Matching fund with Voordekunst', year:'2025', month:3, location:'Rotterdam, NL', details:'Het Cultuurfonds', link:'' },
+  { type:'workshop', name:'Ultra Paesaggio Continuo: Photo-finish e osservatori mobili', year:'2025', month:3, location:'Torino, IT', details:'Circolo del Design, together with 4kHD', link:'' },
+  { type:'lecture', name:'Data Fragments', year:'2024', month:11, location:'Mendrisio, CH', details:'SUPSI. Together with Studio Folder', link:'' },
+  { type:'workshop', name:'Ultra Paesaggio Continuo: Laboratorio di immagini in movimento', year:'2024', month:10, location:'Treviso, IT', details:'Lost APS, together with 4kHD', link:'' },
+  { type:'exhibition', name:'All in! Re-Designing Democracy', year:'2024', month:5, location:'Bonn, DE', details:'Bundeskunsthalle, together with Studio Folder', link:'' },
+  { type:'workshop', name:'Anti-Navigation Tools', year:'2024', month:2, location:'Berlin, DE', details:'EKA Stand-in School, together with 4kHD', link:'https://stand-in.eka-gd-ma.ee/' },
+  { type:'web-site', name:'Frontiere della Transizione', year:'2023', month:12, location:'', details:'Collaborator: Alberto Valz Gris, Luca Draisci', link:'https://frontieredellatransizione.it/' },
+  { type:'presentation', name:"Racconti dai margini dell'urbanizzazione", year:'2023', month:7, location:'Milan, IT', details:"Società Studi Geografici", link:'' },
+  { type:'web-site', name:'Xenoplex, Antikythera 2023', year:'2023', month:4, location:'', details:'Collaborators: Jennifer Carniel, Filippo Elgorni', link:'https://xenoplex.org/' },
+  { type:'workshop', name:'Archiving Memories Workshop', year:'2022', month:2, location:'Rotterdam, NL', details:'Hogeschool Rotterdam', link:'' },
+  { type:'teaching', name:'Digital Methods Winter/Summer School', year:'2022-2025', month:1, location:'Amsterdam, NL', details:'University of Amsterdam', link:'https://www.digitalmethods.net/' },
+  { type:'teaching', name:'Density Design', year:'2020/21', month:9, location:'Milano, IT', details:'Politecnico di Milano, Teaching assistant', link:'https://densitydesign.org/' }
 ];
 
-const IMG_DIR = "img/";
+archiveData.sort((a, b) => {
+  const yearA = parseInt(a.year.split('/')[0]) || 0;
+  const yearB = parseInt(b.year.split('/')[0]) || 0;
+  if (yearB !== yearA) return yearB - yearA;
+  return (b.month || 0) - (a.month || 0);
+});
 
-/* ------------------------------------------------------------------ */
+function archIsUpcoming(item) {
+  const now = new Date();
+  const cy = now.getFullYear(), cm = now.getMonth() + 1;
+  const iy = parseInt(item.year.split('/')[0].split('-')[0]) || 0;
+  const im = item.month || 1;
+  return iy > cy || (iy === cy && im > cm);
+}
+function archGetLink(item) {
+  if (item.link && item.link.trim()) return item.link;
+  const m = item.name.match(/href="(https?:[^"]+)"/);
+  return m ? m[1] : null;
+}
+/* how each type reads inside an entry: "exhibition at <venue>".
+   Types missing from this list just show their own name. */
+const archPhrase = {
+  exhibition:'exhibition at', workshop:'workshop at', residency:'residency at',
+  presentation:'presentation at', lecture:'lecture at', teaching:'teaching at',
+  funding:'grant from', writing:'text for', 'web-site':'website for', projects:'project at',
+};
 
-const all = [];
-
-function altText(p) {
-  return [p.title, p.info].filter(Boolean).join(", ") || p.file;
+/* "2022-2025" → "2022–25", "2020/21" → "2020–21", so ranges fit the year column */
+function archYear(item) {
+  return String(item.year).replace(/^(\d{4})[-\/](\d{2})?(\d{2})$/, '$1–$3');
 }
 
-function fillNote(el, p) {
-  if (p.sold) {
-    if (p.note) {
-      const s = document.createElement("s");
-      s.textContent = p.note;
-      el.append(s, " ");
+/* Venue, city and collaborators for one entry.
+   An item can set `venue` and `with` explicitly; otherwise they are read
+   from `details` ("Venue. Collaborator: X" or "Venue, together with X"). */
+function archParts(item) {
+  let venue, withs;
+  if (item.venue !== undefined || item.with !== undefined) {
+    venue = item.venue || '';
+    withs = item.with || '';
+  } else {
+    const d = String(item.details || '').replace(/<[^>]+>/g, '').trim();
+    const m = d.match(/^(.*?)[.,]?\s*(?:collaborators?:|together with)\s*(.*)$/i);
+    venue = m ? m[1].trim() : d;
+    withs = m ? m[2].trim() : '';
+  }
+  // city without its country code, left out when the venue already names it
+  let city = String(item.location || '').replace(/,\s*[A-Z]{2}$/, '').trim();
+  if (city && venue.includes(city)) city = '';
+  return { venue, city, withs };
+}
+
+/* the title, linked when the entry has a link */
+function archTitle(item) {
+  const name = item.name.replace(/<[^>]+>/g, '');
+  const link = archGetLink(item);
+  return link ? `<a href="${link}" target="_blank" rel="noopener">${name}</a>` : name;
+}
+
+/* two lines per entry: the title, then everything else indented below it.
+   The second line starts with a capital, since it's a line of its own. */
+function archLines(item, parts) {
+  let meta = parts.filter(Boolean).join(', ');
+  meta = meta.charAt(0).toUpperCase() + meta.slice(1);
+  return `<div class="arch-title">${archTitle(item)}</div>`
+       + (meta ? `<div class="arch-meta">${meta}</div>` : '');
+}
+
+/* year view:  Title
+                 Exhibition at Venue, City, with X */
+function archEntryByYear(item) {
+  const { venue, city, withs } = archParts(item);
+  const phrase = archPhrase[item.type] || item.type || '';
+  const first = phrase ? (venue ? phrase + ' ' + venue : phrase.split(' ')[0]) : venue;
+  return archLines(item, [first, city, withs && 'with ' + withs,
+                          archIsUpcoming(item) && 'upcoming']);
+}
+
+/* type view:  Title
+                 Venue, City, with X, 2025
+   (the type is already in the margin) */
+function archEntryByType(item) {
+  const { venue, city, withs } = archParts(item);
+  return archLines(item, [venue, city, withs && 'with ' + withs,
+                          `<span class="arch-nowrap">${archYear(item)}</span>`,   // never split "2020–21"
+                          archIsUpcoming(item) && 'upcoming']);
+}
+
+/* the type groups, in this order. Rename or reorder freely;
+   a type that isn't listed here gets its own group at the end. */
+const archGroupDefs = [
+  { label: 'Exhibitions',             types: ['exhibition'] },
+  { label: 'Workshops, Teaching',     types: ['workshop', 'teaching'] },
+  { label: 'Presentations, Lectures', types: ['presentation', 'lecture'] },
+  { label: 'Residencies, Funding',    types: ['residency', 'funding'] },
+  { label: 'Projects',                types: ['projects'] },
+  { label: 'Web sites',               types: ['web-site'] },
+  { label: 'Writing',                 types: ['writing'] },
+];
+
+/* [{ label, items }] for the chosen view. archiveData is sorted newest
+   first, so entries stay in date order inside every group. */
+function archGroups(mode) {
+  const items = archiveData.filter(i => i.showInAll !== false);
+  if (mode === 'type') {
+    const known = archGroupDefs.flatMap(g => g.types);
+    const extra = [...new Set(items.map(i => i.type).filter(t => !known.includes(t)))]
+      .map(t => ({ label: t, types: [t] }));
+    return archGroupDefs.concat(extra)
+      .map(g => ({ label: g.label, items: items.filter(i => g.types.includes(i.type)) }))
+      .filter(g => g.items.length);
+  }
+  const groups = [];
+  items.forEach(item => {
+    const y = archYear(item);
+    const last = groups[groups.length - 1];
+    if (last && last.label === y) last.items.push(item);
+    else groups.push({ label: y, items: [item] });
+  });
+  return groups;
+}
+
+let archMode = 'type';   // the view the archive opens on: 'type' or 'year'
+function buildArchive() {
+  const content = document.getElementById('archive-content');
+  const entry = archMode === 'type' ? archEntryByType : archEntryByYear;
+  let ah = '';
+  archGroups(archMode).forEach(g => {
+    ah += `<div class="arch-group"><span>${g.label}</span><div>`;
+    g.items.forEach(item => { ah += `<div class="arch-entry">${entry(item)}</div>`; });
+    ah += '</div></div>';
+  });
+  content.className = 'by-' + archMode;
+  content.innerHTML = ah;
+}
+
+/* Year / Type switch */
+document.getElementById('arch-switch').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-mode]');
+  if (!btn || btn.dataset.mode === archMode) return;
+  archMode = btn.dataset.mode;
+  document.querySelectorAll('#arch-switch button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.mode === archMode)));
+  buildArchive();
+  document.getElementById('archive-view').scrollTop = 0;
+});
+
+function openArchive() {
+  buildArchive();
+  document.body.classList.add('archive-open');
+  document.getElementById('archive-view').scrollTop = 0;
+}
+function closeArchive() {
+  document.body.classList.remove('archive-open');
+}
+
+document.getElementById('archive-open').addEventListener('click', e => { e.preventDefault(); openArchive(); });
+document.getElementById('archive-back').addEventListener('click', e => { e.preventDefault(); closeArchive(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('archive-open')) closeArchive(); });
+
+/* ── ARCHIVE FLOAT ─────────────────────────────────────────────
+   On every load the archive link gets a random tilt and a random
+   spot in the space around the footer, never over its text.
+   Tune it here: */
+(function archiveFloat() {
+  const TILT_MIN = 4;     // degrees, either way: always visibly tilted…
+  const TILT_MAX = 30;    // …but never more than this
+  const REACH    = 2.5;   // how far from the footer text it may land, in em
+  const GAP      = 0.4;   // clear space it keeps from the footer text, in em
+
+  const el     = document.getElementById('archive-float');
+  const footer = document.getElementById('footer');
+
+  const tilt = (TILT_MIN + Math.random() * (TILT_MAX - TILT_MIN)) * (Math.random() < 0.5 ? -1 : 1);
+  const rad  = tilt * Math.PI / 180;
+
+  // reads the safe areas (notch, home bar) so it never lands under them
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;'
+    + 'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+  document.body.appendChild(probe);
+
+  let size, zone, pos = null;
+
+  // the tilted link's bounding box
+  function measureSize() {
+    const w = el.offsetWidth, h = el.offsetHeight;
+    const c = Math.abs(Math.cos(rad)), s = Math.abs(Math.sin(rad));
+    size = { w: w * c + h * s, h: w * s + h * c, lw: w, lh: h };
+  }
+
+  // the footer's text lines (kept clear) and the area around them it may use
+  function measureZone() {
+    const fs  = parseFloat(getComputedStyle(footer).fontSize) || 16;
+    const gap = GAP * fs, reach = REACH * fs;
+    const range = document.createRange();
+    range.selectNodeContents(footer);
+    const lines = [...range.getClientRects()].filter(r => r.width > 0 && r.height > 0);
+    if (!lines.length) lines.push(footer.getBoundingClientRect());
+
+    const box = {
+      l: Math.min(...lines.map(r => r.left)),  t: Math.min(...lines.map(r => r.top)),
+      r: Math.max(...lines.map(r => r.right)), b: Math.max(...lines.map(r => r.bottom)),
+    };
+    const safe   = getComputedStyle(probe);
+    const narrow = window.innerWidth <= 768;
+    const area = {
+      l: Math.max(5 + parseFloat(safe.paddingLeft), box.l - reach - size.w),
+      t: Math.max(5 + parseFloat(safe.paddingTop),  box.t - reach - size.h),
+      // desktop: keep clear of the thumbnail bar on the right
+      r: Math.min(window.innerWidth - (narrow ? 5 : 80) - parseFloat(safe.paddingRight), box.r + reach + size.w),
+      b: Math.min(window.innerHeight - 5 - parseFloat(safe.paddingBottom), box.b + reach + size.h),
+    };
+    // small screens: the archive's Year / Type switch sits below the footer, stay above it
+    if (narrow) {
+      const sw = document.getElementById('arch-switch');
+      area.b = Math.min(area.b, parseFloat(getComputedStyle(sw).paddingTop) - 5);
     }
-    el.append("Sold");
-  } else if (p.note) {
-    el.append(p.note);
-  }
-}
-
-const work = document.getElementById("work");
-
-series.forEach(s => {
-  const section = document.createElement("section");
-  section.className = "series";
-
-  if (s.title) {
-    const h = document.createElement("h2");
-    h.textContent = s.title;
-    section.append(h);
+    zone = {
+      area,
+      keepOut: lines.map(r => ({ l: r.left - gap, t: r.top - gap, r: r.right + gap, b: r.bottom + gap })),
+    };
   }
 
-  const grid = document.createElement("div");
-  grid.className = "grid";
-
-  s.photos.forEach(p => {
-    const index = all.length;
-    all.push(p);
-
-    const a = document.createElement("a");
-    a.className = "item" + (p.sold ? " sold" : "");
-    a.href = IMG_DIR + p.file;
-
-    const img = document.createElement("img");
-    img.alt = altText(p);
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.addEventListener("error", () => a.classList.add("missing"), { once: true });
-    img.src = IMG_DIR + p.file;
-
-    const ph = document.createElement("span");
-    ph.className = "ph";
-    ph.textContent = IMG_DIR + p.file;
-
-    const cap = document.createElement("span");
-    cap.className = "caption";
-    if (p.title) { const t = document.createElement("span"); t.textContent = p.title; cap.append(t); }
-    if (p.info)  { const i = document.createElement("span"); i.textContent = p.info;  cap.append(i); }
-    if (p.note || p.sold) { const n = document.createElement("span"); fillNote(n, p); cap.append(n); }
-
-    a.append(img, ph, cap);
-    a.addEventListener("click", e => {
-      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      e.preventDefault();
-      openViewer(index);
-    });
-
-    grid.append(a);
-  });
-
-  section.append(grid);
-  work.append(section);
-});
-
-document.getElementById("year").textContent = new Date().getFullYear();
-
-/* Large view ------------------------------------------------------- */
-
-const viewer = document.getElementById("viewer");
-const page = document.querySelector(".page");
-const vImg = viewer.querySelector("img");
-const vText = document.getElementById("v-text");
-const vCount = document.getElementById("v-count");
-let current = 0;
-let lastFocus = null;
-
-function show(i) {
-  const n = all.length;
-  current = (i + n) % n;
-  const p = all[current];
-
-  vImg.src = IMG_DIR + p.file;
-  vImg.alt = altText(p);
-
-  vText.textContent = [p.title, p.info].filter(Boolean).join(", ");
-  if (p.note || p.sold) {
-    if (vText.textContent) vText.append(", ");
-    fillNote(vText, p);
+  // does the link fit with its centre at (x, y)?
+  function fits(x, y) {
+    const l = x - size.w / 2, r = x + size.w / 2, t = y - size.h / 2, b = y + size.h / 2;
+    const a = zone.area;
+    if (l < a.l || r > a.r || t < a.t || b > a.b) return false;
+    return zone.keepOut.every(k => r <= k.l || l >= k.r || b <= k.t || t >= k.b);
   }
-  vCount.textContent = n > 1 ? `${current + 1} of ${n}` : "";
 
-  [current + 1, current - 1].forEach(j => {
-    new Image().src = IMG_DIR + all[(j + n) % n].file;
-  });
-}
+  // a random free spot around the footer
+  function randomSpot() {
+    const a = zone.area, spanX = a.r - a.l - size.w, spanY = a.b - a.t - size.h;
+    if (spanX < 0 || spanY < 0) return null;
+    for (let i = 0; i < 200; i++) {
+      const q = { x: a.l + size.w / 2 + Math.random() * spanX, y: a.t + size.h / 2 + Math.random() * spanY };
+      if (fits(q.x, q.y)) return q;
+    }
+    return null;
+  }
 
-function openViewer(i) {
-  lastFocus = document.activeElement;
-  show(i);
-  viewer.hidden = false;
-  page.inert = true;
-  document.documentElement.classList.add("viewing");
-  viewer.focus();
-}
+  // no free spot at all (a tiny window): just above the footer, or below it
+  function fallbackSpot() {
+    const top = Math.min(...zone.keepOut.map(k => k.t)), bottom = Math.max(...zone.keepOut.map(k => k.b));
+    const left = Math.min(...zone.keepOut.map(k => k.l));
+    return { x: left + size.w / 2, y: top - size.h >= 0 ? top - size.h / 2 : bottom + size.h / 2 };
+  }
 
-function closeViewer() {
-  viewer.hidden = true;
-  page.inert = false;
-  document.documentElement.classList.remove("viewing");
-  if (lastFocus) lastFocus.focus();
-}
+  // keeps its spot; only looks for a new one if the window change pushed it onto the text
+  function place() {
+    measureSize();
+    measureZone();
+    if (!pos || !fits(pos.x, pos.y)) pos = randomSpot() || fallbackSpot();
+    el.style.transform = `translate(${pos.x - size.lw / 2}px, ${pos.y - size.lh / 2}px) rotate(${tilt}deg)`;
+  }
 
-viewer.querySelectorAll("[data-go]").forEach(b =>
-  b.addEventListener("click", () => show(current + Number(b.dataset.go)))
-);
-viewer.querySelector("[data-close]").addEventListener("click", closeViewer);
-vImg.addEventListener("click", () => show(current + 1));
+  // the link swaps "Archive" for "← Back" when the archive opens: re-centre on the same spot
+  new MutationObserver(() => {
+    measureSize();
+    el.style.transform = `translate(${pos.x - size.lw / 2}px, ${pos.y - size.lh / 2}px) rotate(${tilt}deg)`;
+  }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  window.addEventListener('resize', place);
 
-document.addEventListener("keydown", e => {
-  if (viewer.hidden) return;
-  if (e.key === "Escape") closeViewer();
-  else if (e.key === "ArrowRight") show(current + 1);
-  else if (e.key === "ArrowLeft") show(current - 1);
-});
+  place();
+  el.style.visibility = 'visible';
+})();
 </script>
-
 </body>
 </html>

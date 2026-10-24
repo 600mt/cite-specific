@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mat-t-6</title>
+<meta name="description" content="Your Name is a photographer based in [city].">
+<style>
+  :root {
+    --text: #000;
+    --muted: #999;
+    --bg: #fff;
+    --placeholder: #eee;
+
+    --thumb: 160px;     /* width of each thumbnail: raise to 240px or 320px for bigger photos */
+    --col-gap: 10px;
+    --row-gap: 20px;
+
+    color-scheme: light;
+  }
+
+  html { background: var(--bg); }
+  html.viewing { overflow: hidden; }
+
+  body {
+    margin: 8px;
+    font-family: "Times New Roman", Times, serif;
+    font-size: 20px;
+    line-height: 1.2;
+    color: var(--text);
+    background: var(--bg);
+  }
+
+  a { color: inherit; text-decoration: none; }
+  p { margin: 0 0 1em; }
+  strong, .intro a, footer a { font-weight: bold; }
+
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  /* Series */
+  .series + .series { margin-top: 1em; }
+
+  h2 {
+    font-size: inherit;
+    font-weight: normal;
+    font-style: italic;
+    margin: 0 0 2px;
+  }
+
+  .grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--row-gap) var(--col-gap);
+  }
+
+  .item { display: block; width: var(--thumb); }
+  .item img { display: block; width: 100%; height: auto; }
+  .caption { display: block; margin-top: 3px; }
+  .caption span { display: block; }
+
+  /* Greyed-out item, as with "Sold" on the original */
+  .item.sold { color: var(--muted); }
+  .item.sold img { opacity: .45; filter: grayscale(1); }
+
+  /* Shown when a file in img/ can't be found */
+  .ph {
+    display: none;
+    aspect-ratio: 1;
+    padding: 6px;
+    box-sizing: border-box;
+    background: var(--placeholder);
+    color: var(--muted);
+    font-size: 14px;
+    word-break: break-all;
+  }
+  .item.missing img { display: none; }
+  .item.missing .ph { display: block; }
+
+  footer { margin-top: 1.5em; }
+
+  /* Large view */
+  #viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    padding: 8px;
+    overflow: auto;
+    background: var(--bg);
+  }
+  #viewer[hidden] { display: none; }
+  #viewer:focus { outline: none; }
+
+  #viewer img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: calc(100vh - 2.6em - 22px);
+    max-height: calc(100dvh - 2.6em - 22px);
+    cursor: pointer;
+  }
+  #v-text { margin: 3px 0 0; }
+  .controls { margin: 0; }
+  .controls button {
+    font: inherit;
+    font-weight: bold;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    margin-right: .35em;
+    cursor: pointer;
+  }
+  #v-count { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <p class="intro">
+    <strong><a href="./">Your Name</a></strong>
+    Matteo Bettini is a photographer based in [city]. This site is a work in progress,
+    but feel free to look around at your leisure. My current series is called [Series title],
+    which is about [one line on what the series is about]. Click any photograph to see it larger.
+    <a href="mailto:you@example.com">Get in touch</a> if you’d like to work together or buy a print.
+    <a href="https://www.instagram.com/yourname">Instagram.</a>
+  </p>
+
+  <main id="work"></main>
+
+  <footer>
+    <p>
+      ©<span id="year">2026</span> Your Name. You can reach me at you [at] example.com.
+      <a href="mailto:you@example.com">Write.</a>
+    </p>
+  </footer>
+</div>
+
+<div id="viewer" role="dialog" aria-modal="true" aria-label="Photograph" tabindex="-1" hidden>
+  <img alt="">
+  <p id="v-text"></p>
+  <p class="controls">
+    <button type="button" data-go="-1">previous</button>
+    <button type="button" data-go="1">next</button>
+    <button type="button" data-close>close</button>
+    <span id="v-count"></span>
+  </p>
+</div>
+
+<script>
+/* ------------------------------------------------------------------
+   YOUR PHOTOGRAPHS
+   Put the image files in the img/ folder next to this index.html,
+   then list them here in the order you want them shown.
+
+   file   the file name inside img/            (required)
+   title  first line of the caption            (optional)
+   info   second line, e.g. place and year     (optional)
+   note   third line, e.g. edition or price    (optional)
+   sold   true greys the photo out             (optional)
+
+   Add or remove series by copying a { title, photos } block.
+   ------------------------------------------------------------------ */
+const series = [
+  {
+    title: "Series title — Place, 2026",
+    photos: [
+      { file: "01.jpg", title: "Untitled", info: "Place, 2026" },
+      { file: "02.jpg", title: "Untitled", info: "Place, 2026" },
+      { file: "03.jpg", title: "Untitled", info: "Place, 2026", note: "Print, edition of 5", sold: true },
+      { file: "04.jpg", title: "Untitled", info: "Place, 2026" },
+      { file: "05.jpg", title: "Untitled", info: "Place, 2026" },
+      { file: "06.jpg", title: "Untitled", info: "Place, 2026" },
+      { file: "07.jpg", title: "Untitled", info: "Place, 2026" },
+      { file: "08.jpg", title: "Untitled", info: "Place, 2026" }
+    ]
+  },
+  {
+    title: "Second series — Place, 2025",
+    photos: [
+      { file: "09.jpg", title: "Untitled", info: "Place, 2025" },
+      { file: "10.jpg", title: "Untitled", info: "Place, 2025" },
+      { file: "11.jpg", title: "Untitled", info: "Place, 2025" }
+    ]
+  }
+];
+
+const IMG_DIR = "img/";
+
+/* ------------------------------------------------------------------ */
+
+const all = [];
+
+function altText(p) {
+  return [p.title, p.info].filter(Boolean).join(", ") || p.file;
+}
+
+function fillNote(el, p) {
+  if (p.sold) {
+    if (p.note) {
+      const s = document.createElement("s");
+      s.textContent = p.note;
+      el.append(s, " ");
+    }
+    el.append("Sold");
+  } else if (p.note) {
+    el.append(p.note);
+  }
+}
+
+const work = document.getElementById("work");
+
+series.forEach(s => {
+  const section = document.createElement("section");
+  section.className = "series";
+
+  if (s.title) {
+    const h = document.createElement("h2");
+    h.textContent = s.title;
+    section.append(h);
+  }
+
+  const grid = document.createElement("div");
+  grid.className = "grid";
+
+  s.photos.forEach(p => {
+    const index = all.length;
+    all.push(p);
+
+    const a = document.createElement("a");
+    a.className = "item" + (p.sold ? " sold" : "");
+    a.href = IMG_DIR + p.file;
+
+    const img = document.createElement("img");
+    img.alt = altText(p);
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.addEventListener("error", () => a.classList.add("missing"), { once: true });
+    img.src = IMG_DIR + p.file;
+
+    const ph = document.createElement("span");
+    ph.className = "ph";
+    ph.textContent = IMG_DIR + p.file;
+
+    const cap = document.createElement("span");
+    cap.className = "caption";
+    if (p.title) { const t = document.createElement("span"); t.textContent = p.title; cap.append(t); }
+    if (p.info)  { const i = document.createElement("span"); i.textContent = p.info;  cap.append(i); }
+    if (p.note || p.sold) { const n = document.createElement("span"); fillNote(n, p); cap.append(n); }
+
+    a.append(img, ph, cap);
+    a.addEventListener("click", e => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      openViewer(index);
+    });
+
+    grid.append(a);
+  });
+
+  section.append(grid);
+  work.append(section);
+});
+
+document.getElementById("year").textContent = new Date().getFullYear();
+
+/* Large view ------------------------------------------------------- */
+
+const viewer = document.getElementById("viewer");
+const page = document.querySelector(".page");
+const vImg = viewer.querySelector("img");
+const vText = document.getElementById("v-text");
+const vCount = document.getElementById("v-count");
+let current = 0;
+let lastFocus = null;
+
+function show(i) {
+  const n = all.length;
+  current = (i + n) % n;
+  const p = all[current];
+
+  vImg.src = IMG_DIR + p.file;
+  vImg.alt = altText(p);
+
+  vText.textContent = [p.title, p.info].filter(Boolean).join(", ");
+  if (p.note || p.sold) {
+    if (vText.textContent) vText.append(", ");
+    fillNote(vText, p);
+  }
+  vCount.textContent = n > 1 ? `${current + 1} of ${n}` : "";
+
+  [current + 1, current - 1].forEach(j => {
+    new Image().src = IMG_DIR + all[(j + n) % n].file;
+  });
+}
+
+function openViewer(i) {
+  lastFocus = document.activeElement;
+  show(i);
+  viewer.hidden = false;
+  page.inert = true;
+  document.documentElement.classList.add("viewing");
+  viewer.focus();
+}
+
+function closeViewer() {
+  viewer.hidden = true;
+  page.inert = false;
+  document.documentElement.classList.remove("viewing");
+  if (lastFocus) lastFocus.focus();
+}
+
+viewer.querySelectorAll("[data-go]").forEach(b =>
+  b.addEventListener("click", () => show(current + Number(b.dataset.go)))
+);
+viewer.querySelector("[data-close]").addEventListener("click", closeViewer);
+vImg.addEventListener("click", () => show(current + 1));
+
+document.addEventListener("keydown", e => {
+  if (viewer.hidden) return;
+  if (e.key === "Escape") closeViewer();
+  else if (e.key === "ArrowRight") show(current + 1);
+  else if (e.key === "ArrowLeft") show(current - 1);
+});
+</script>
+
+</body>
+</html>
